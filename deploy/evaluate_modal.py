@@ -1,0 +1,196 @@
+"""Zero-shot TabICLv2 on CryptoBench, evaluated on a Modal GPU.
+
+WHY MODAL
+    TabICL is in-context, so the labelled table is pushed through the network on
+    every prediction. Scoring ~70k held-out residues against a ~50k-row context
+    is a large attention problem: minutes on a GPU, hours on the 4-core CPU box
+    this repo is developed on. The checkpoint (110 MB) also downloads in seconds
+    there and stalls locally.
+
+WHAT IT RUNS
+    1. Inner 4-fold CV over CryptoBench's own train folds. Its only job is to
+       pick a decision threshold at a target FPR. Doing this on the test set
+       would be leakage, so it happens here and the value is then frozen.
+    2. One final run: context = all four train folds, scored against the
+       held-out test fold. That number is the one comparable to the paper.
+
+NOT FINE-TUNED
+    Deliberately zero-shot. `tabicl[finetune]` exists, but fine-tuning forfeits
+    the no-training property that makes the comparison interesting. If it is
+    ever added, report it beside the zero-shot number, not instead of it.
+
+COST
+    T4 is enough -- this is inference only, no backward pass. A full run is a
+    few minutes of GPU time. Run `--folds 0` first and read the printed cost.
+
+USAGE
+    python -m cryptic_tabicl.build_table --out build/residues.parquet   # local
+    modal run deploy/evaluate_modal.py --smoke                          # pilot
+    modal run deploy/evaluate_modal.py                                  # full
+"""
+from __future__ import annotations
+
+import json
+import os
+
+import modal
+
+TABLE = "build/residues.parquet"
+TABLE_ENS = "build/residues_ens.parquet"
+TABLE_CONS = "build/residues_cons.parquet"
+# ESM-2 PCA variants. k is a column trim of one 64-component fit, not three
+# separate fits, so the three tables differ only in how many columns they carry.
+TABLE_ESM = {k: f"build/residues_esm{k}.parquet" for k in (16, 32, 64)}
+# Guard only on the client. This module is also imported INSIDE the container,
+# where the table lives at /data/residues.parquet and this relative path does
+# not exist -- checking unconditionally makes every remote run die on import.
+if modal.is_local() and not os.path.exists(TABLE):
+    raise SystemExit(
+        f"missing {TABLE}\n\nBuild it first:\n"
+        "    python -m cryptic_tabicl.build_table --out build/residues.parquet"
+    )
+
+GPU = "T4"
+GPU_HOURLY_USD = 0.59
+CKPT = "tabicl-classifier-v2-20260212.ckpt"
+
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("torch==2.6.0", index_url="https://download.pytorch.org/whl/cu124")
+    .pip_install("tabicl==2.1.1", "scikit-learn", "pandas", "pyarrow", "numpy<2")
+    # Bake the 110 MB checkpoint into the image. Otherwise every cold container
+    # re-downloads it from the HF Hub unauthenticated, which is both slow and
+    # rate-limited -- and it happens before any useful work, so a client-side
+    # timeout kills the run during the download rather than during compute.
+    .run_commands(
+        "python -c \"from huggingface_hub import hf_hub_download as d; "
+        f"d(repo_id='jingang/TabICL', filename='{CKPT}')\""
+    )
+    .add_local_file(TABLE, "/data/residues.parquet")
+    .add_local_dir("cryptic_tabicl", "/app/cryptic_tabicl")
+)
+
+# The ensemble-enriched table rides along when it exists, so one image serves
+# both the Tier A baseline and the enriched run and `--variant` just picks which
+# to read. Rebuilding per variant would make the two runs differ by more than
+# their feature set.
+if modal.is_local() and os.path.exists(TABLE_ENS):
+    image = image.add_local_file(TABLE_ENS, "/data/residues_ens.parquet")
+if modal.is_local() and os.path.exists(TABLE_CONS):
+    image = image.add_local_file(TABLE_CONS, "/data/residues_cons.parquet")
+for _k, _path in TABLE_ESM.items():
+    if modal.is_local() and os.path.exists(_path):
+        image = image.add_local_file(_path, f"/data/residues_esm{_k}.parquet")
+
+app = modal.App("cryptobench-tabicl")
+
+
+@app.function(image=image, gpu=GPU, timeout=3600)
+def run(smoke: bool = False, n_estimators: int = 8, budget: int = 50_000,
+        variant: str = "tierA") -> dict:
+    import sys
+    import time
+
+    sys.path.insert(0, "/app")
+    import numpy as np
+    import pandas as pd
+    from cryptic_tabicl import config as C, evaluate, model, sampling
+
+    path = {
+        "ensemble": "/data/residues_ens.parquet",
+        "conservation": "/data/residues_cons.parquet",
+        "esm16": "/data/residues_esm16.parquet",
+        "esm32": "/data/residues_esm32.parquet",
+        "esm64": "/data/residues_esm64.parquet",
+    }.get(variant, "/data/residues.parquet")
+    table = pd.read_parquet(path)
+    n_feat = len([c for c in table.columns
+                  if c not in C.NON_FEATURE_COLS and c != "pdb_id"])
+    print(f"variant={variant}  table={path}  features={n_feat}")
+    if smoke:
+        # a stratified slice of proteins, so the pilot exercises every fold
+        keep = (table.groupby("fold")[C.GROUP_COL]
+                .apply(lambda s: pd.Series(s.unique()[:20])).tolist())
+        table = table[table[C.GROUP_COL].isin(keep)]
+        budget = min(budget, 8000)
+
+    train = table[table["split"] == "train"]
+    test = table[table["split"] == "test"]
+    print(f"train {len(train):,} rows / {train[C.GROUP_COL].nunique()} proteins")
+    print(f"test  {len(test):,} rows / {test[C.GROUP_COL].nunique()} proteins")
+    print(f"prevalence: train {train[C.LABEL_COL].mean():.2%}, "
+          f"test {test[C.LABEL_COL].mean():.2%}", flush=True)
+
+    # ---- 1. inner CV over CryptoBench's folds, to pick a threshold ----------
+    folds = sorted(train["fold"].dropna().unique())
+    thresholds, cv_rows = [], []
+    for held in folds:
+        ctx_src = train[train["fold"] != held]
+        val = train[train["fold"] == held]
+        ctx, plan = sampling.build_context(ctx_src, budget=budget)
+        print(f"\n[cv] hold out {held}\n{plan}", flush=True)
+
+        t0 = time.time()
+        clf = model.CrypticSitePredictor(n_estimators=n_estimators).fit(ctx)
+        scores = clf.predict_by_protein(val)
+        thr = evaluate.choose_threshold(val[C.LABEL_COL].to_numpy(), scores)
+        thresholds.append(thr)
+        res = evaluate.summarise(val[C.LABEL_COL].to_numpy(), scores,
+                                 val[C.GROUP_COL].to_numpy(), thr,
+                                 label=f"cv/{held}")
+        cv_rows.append(res)
+        print(f"[cv] {held}: AUC {res['AUC']:.3f} AUPRC {res['AUPRC']:.3f} "
+              f"thr {thr:.4f}  ({time.time()-t0:.0f}s)", flush=True)
+
+    threshold = float(np.median(thresholds))
+    print(f"\nfrozen threshold (median of folds): {threshold:.4f}", flush=True)
+
+    # ---- 2. final: all train folds as context, score the test set -----------
+    ctx, plan = sampling.build_context(train, budget=budget)
+    print(f"\n[final]\n{plan}", flush=True)
+    t0 = time.time()
+    clf = model.CrypticSitePredictor(n_estimators=n_estimators).fit(ctx)
+    scores = clf.predict_by_protein(test)
+    print(f"[final] scored {len(test):,} residues in {time.time()-t0:.0f}s", flush=True)
+
+    result = evaluate.summarise(test[C.LABEL_COL].to_numpy(), scores,
+                                test[C.GROUP_COL].to_numpy(), threshold,
+                                label=f"TabICLv2 zero-shot ({variant})")
+    per_prot = evaluate.per_protein(test[C.LABEL_COL].to_numpy(), scores,
+                                    test[C.GROUP_COL].to_numpy(), threshold)
+    strat = evaluate.stratified(test, scores, threshold)
+
+    print("\n" + evaluate.comparison_table(result))
+    print(f"\npooled AUC {result['AUC_pooled']:.3f}  "
+          f"AUPRC {result['AUPRC_pooled']:.3f}")
+    print("\nstratified by pocket context:")
+    print(strat.to_string(index=False))
+
+    return {
+        "result": result,
+        "cv": cv_rows,
+        "threshold": threshold,
+        "stratified": strat.to_dict(orient="records"),
+        "per_protein": per_prot.to_dict(orient="records"),
+        "scores": {"apo_id": test[C.GROUP_COL].tolist(),
+                   "chain": test["chain"].tolist(),
+                   "seq_id": test["seq_id"].tolist(),
+                   "y": test[C.LABEL_COL].tolist(),
+                   "score": [float(s) for s in scores]},
+    }
+
+
+@app.local_entrypoint()
+def main(smoke: bool = False, n_estimators: int = 8, budget: int = 50_000,
+         variant: str = "tierA"):
+    out = run.remote(smoke=smoke, n_estimators=n_estimators, budget=budget,
+                     variant=variant)
+    os.makedirs("build", exist_ok=True)
+    tag = "_smoke" if smoke else ""
+    dest = f"build/modal_result_{variant}{tag}.json"
+    with open(dest, "w") as fh:
+        json.dump(out, fh, indent=2)
+    r = out["result"]
+    print(f"\nwrote {dest}")
+    print(f"AUC {r['AUC']:.3f}  AUPRC {r['AUPRC']:.3f}  "
+          f"TPR {r['TPR']:.3f}  FPR {r['FPR']:.3f}  MCC {r['MCC']:.3f}")

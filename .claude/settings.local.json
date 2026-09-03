@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(grep -E \"\\\\.\\(py|json|csv|pkl|npy|h5\\)$\")",
+      "WebFetch(domain:tabicl.readthedocs.io)"
+    ]
+  }
+}

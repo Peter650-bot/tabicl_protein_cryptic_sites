@@ -1,0 +1,11 @@
+# Regenerable pipeline outputs (parquet caches, logs, intermediate JSON) —
+# reproduce via scripts/*.py per README.md. Several files exceed GitHub's
+# 100MB per-file limit.
+build/
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Local structure cache / stage dir referenced by cryptic_tabicl/config.py
+.DS_Store

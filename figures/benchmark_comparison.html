@@ -1,0 +1,742 @@
+<title>CryptoBench Scoreboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    color-scheme: light;
+    /* neutrals: cool-biased paper, picked against the blue accent */
+    --plane:        #f4f5f3;
+    --surface:      #fcfcfb;
+    --surface-2:    #f0f1ee;
+    --ink:          #101312;
+    --ink-2:        #4f534f;
+    --ink-muted:    #8b8f8a;
+    --rule:         #e0e2dc;
+    --grid:         #e6e8e2;
+    --baseline:     #c2c5bd;
+    --strip:        #d8dad3;
+    --flag-band:    #f2efe6;
+    --flag-ink:     #7a6a3d;
+    /* validated categorical slots (dataviz reference palette, light steps) */
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --shadow: 0 1px 2px rgba(16,19,18,.05), 0 8px 24px -16px rgba(16,19,18,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --plane:      #0d0d0d;
+      --surface:    #1a1a19;
+      --surface-2:  #222221;
+      --ink:        #ffffff;
+      --ink-2:      #c3c2b7;
+      --ink-muted:  #898781;
+      --rule:       #2f2f2c;
+      --grid:       #2c2c2a;
+      --baseline:   #45453f;
+      --strip:      #3a3a37;
+      --flag-band:  #24221b;
+      --flag-ink:   #c2ad76;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:      #0d0d0d;
+    --surface:    #1a1a19;
+    --surface-2:  #222221;
+    --ink:        #ffffff;
+    --ink-2:      #c3c2b7;
+    --ink-muted:  #898781;
+    --rule:       #2f2f2c;
+    --grid:       #2c2c2a;
+    --baseline:   #45453f;
+    --strip:      #3a3a37;
+    --flag-band:  #24221b;
+    --flag-ink:   #c2ad76;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  body {
+    background: var(--plane);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 40px 20px 72px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
+
+  /* ---- masthead ---- */
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-muted); margin: 0 0 12px;
+  }
+  h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 600; font-size: clamp(28px, 4.4vw, 40px); line-height: 1.15;
+    letter-spacing: -.015em; margin: 0 0 14px; text-wrap: balance;
+  }
+  .standfirst { margin: 0; max-width: 64ch; color: var(--ink-2); font-size: 16px; }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+  .rule { height: 1px; background: var(--rule); border: 0; margin: 0; }
+
+  /* ---- legend ---- */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 8px 26px; align-items: baseline;
+    padding: 16px 20px; background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 4px; box-shadow: var(--shadow);
+  }
+  .legend-item { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--ink-2); }
+  .swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; }
+  .swatch.s1 { background: var(--series-1); }
+  .swatch.s2 { background: var(--series-2); }
+  .swatch.s3 { background: var(--series-3); }
+  .swatch.s4 { background: var(--series-4); }
+  .swatch.s5 { background: var(--series-5); }
+  .legend-item .nm { color: var(--ink); font-weight: 500; }
+  .tag {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: .04em; text-transform: uppercase; color: var(--ink-muted);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 1px 5px;
+  }
+  .tag.ours { color: var(--series-1); border-color: currentColor; }
+
+  /* ---- panels ---- */
+  .panel {
+    margin: 0; background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 4px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .panel-head { padding: 18px 22px 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .panel-head h2 {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 15px; font-weight: 500; letter-spacing: .02em; margin: 0; color: var(--ink);
+  }
+  .dir { font-size: 11.5px; color: var(--ink-muted); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .panel-head p { margin: 0; flex: 1 1 340px; font-size: 13.5px; color: var(--ink-2); min-width: 0; }
+  .plot-scroll { overflow-x: auto; padding: 0 10px 6px; }
+  .plot-scroll svg { display: block; min-width: 700px; width: 100%; height: auto; }
+  #ladder-svg { min-width: 860px; }
+
+  /* svg roles */
+  .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .axis-line { stroke: var(--baseline); stroke-width: 1; }
+  .tick { fill: var(--ink-muted); font-size: 10.5px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .glabel { fill: var(--ink); font-size: 12px; font-weight: 500; }
+  .gsub   { fill: var(--ink-muted); font-size: 10.5px; }
+  .gsub.flag { fill: var(--flag-ink); }
+  .vlabel { fill: var(--ink-2); font-size: 10.5px; font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .nolabel { fill: var(--ink-muted); font-size: 12px; }
+  .band { fill: var(--flag-band); }
+  .bar.s1 { fill: var(--series-1); }
+  .bar.s2 { fill: var(--series-2); }
+  .bar.s3 { fill: var(--series-3); }
+  .bar.s4 { fill: var(--series-4); }
+  .bar.s5 { fill: var(--series-5); }
+  .hit { fill: transparent; cursor: default; outline: none; }
+  .hit:hover ~ .bar, .hit:focus-visible ~ .bar { opacity: .74; }
+  .hit:focus-visible { stroke: var(--ink); stroke-width: 1.5; }
+
+  /* ---- dot-strip ladder ---- */
+  .fam1 { fill: var(--series-1); }
+  .fam2 { fill: var(--series-2); }
+  .fam3 { fill: var(--series-3); }
+  .dot { stroke: var(--surface); stroke-width: 2; }
+  .strip { stroke: var(--strip); stroke-width: 2; stroke-linecap: round; }
+  .refline { stroke: var(--flag-ink); stroke-width: 1; }
+  .reflabel { fill: var(--flag-ink); font-size: 9.5px; }
+  .colhead { fill: var(--ink); font-size: 12.5px; font-weight: 500; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .rowfeat { fill: var(--ink); font-size: 11.5px; font-weight: 500; }
+  .rowreg  { fill: var(--ink-muted); font-size: 11px; }
+  .dot-hit { fill: transparent; cursor: default; outline: none; }
+  .dot-hit:focus-visible { stroke: var(--ink); stroke-width: 1.5; }
+
+  /* ---- tooltip ---- */
+  #tip {
+    position: fixed; z-index: 20; pointer-events: none; opacity: 0;
+    transition: opacity .1s ease; background: var(--surface);
+    border: 1px solid var(--rule); border-radius: 4px; padding: 9px 12px;
+    box-shadow: 0 4px 20px -6px rgba(0,0,0,.34); max-width: 260px;
+  }
+  @media (prefers-reduced-motion: reduce) { #tip { transition: none; } }
+  #tip .tv {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 17px;
+    font-weight: 500; color: var(--ink); line-height: 1.2;
+  }
+  #tip .tm { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink); margin-top: 5px; }
+  #tip .key { width: 12px; height: 2.5px; border-radius: 2px; flex: none; }
+  #tip .ts { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
+
+  /* ---- table ---- */
+  h3 {
+    font-family: "IBM Plex Serif", Georgia, serif; font-size: 20px; font-weight: 600;
+    margin: 0 0 4px; letter-spacing: -.01em;
+  }
+  .sec-note { margin: 0 0 16px; color: var(--ink-2); font-size: 13.5px; max-width: 64ch; }
+  .table-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 660px; }
+  caption { text-align: left; padding: 14px 18px 0; color: var(--ink-muted); font-size: 12px; }
+  th, td { padding: 8px 14px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px;
+    letter-spacing: .05em; text-transform: uppercase; color: var(--ink-muted); font-weight: 500;
+  }
+  tbody td { font-variant-numeric: tabular-nums; font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--ink-2); }
+  tbody td:first-child, tbody td:nth-child(2) { font-family: "IBM Plex Sans", sans-serif; color: var(--ink); }
+  tbody tr.ours td:first-child { font-weight: 600; }
+  tbody td.best { color: var(--ink); font-weight: 500; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .mkey { display: inline-flex; align-items: center; gap: 8px; }
+  .subset-start td { border-top: 1px solid var(--rule); }
+
+  /* ---- notes ---- */
+  .notes { display: grid; gap: 14px; }
+  .note { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; font-size: 13.5px; color: var(--ink-2); }
+  .note .n {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px;
+    color: var(--ink-muted); padding-top: 3px;
+  }
+  .note strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: .9em;
+    background: var(--surface-2); padding: 1px 5px; border-radius: 3px;
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">CryptoBench · per-residue cryptic site prediction</p>
+    <h1>Where TabICL stands against the published baselines</h1>
+    <p class="standfirst">Every method the CryptoBench paper reports, on every subset it reports them on, next to this project's two zero-shot TabICLv2 variants. Metrics are computed <strong>per structure then averaged</strong> — CryptoBench's own convention — so the columns are comparable. <strong>AUPRC leads</strong>: at 5.28&nbsp;% positives it is the only summary that reflects how hard the task actually is. Below the benchmark bars, a second view puts every model we ran — TabICL, LogisticRegression and RandomForest, across six feature sets and three negative-sampling regimes — on one ladder.</p>
+  </header>
+
+  <div class="legend" id="legend"></div>
+
+  <div id="panels" style="display:flex;flex-direction:column;gap:22px;"></div>
+
+  <hr class="rule">
+
+  <section>
+    <h3>Every number in the figure</h3>
+    <p class="sec-note">The table view carries all values, including those the bars label only on hover. Bold marks the best value in each subset&nbsp;×&nbsp;metric block.</p>
+    <div class="table-scroll"><table id="tbl"></table></div>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <h3>The model ladder on CB-full</h3>
+    <p class="sec-note">LogisticRegression and RandomForest exist on CB-full only, so they cannot join the bars above. Here every configuration sits on its own row — <strong>same features, same negatives</strong> — with one dot per model family. The horizontal spread inside a row is the model effect alone; the vertical distance between rows is what the features and the negative sampler did.</p>
+    <div class="legend" id="ladder-legend"></div>
+    <figure class="panel" style="margin-top:18px">
+      <div class="plot-scroll"><svg id="ladder-svg"></svg></div>
+    </figure>
+    <div class="table-scroll" style="margin-top:18px"><table id="ladder-tbl"></table></div>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <h3>Reading the gaps</h3>
+    <div class="notes" id="notes"></div>
+  </section>
+
+</div>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // dp = published precision. Our runs are measured to 3 dp; the CryptoBench
+  // paper reports 2 dp, and rendering 0.86 as "0.860" would invent a digit.
+  var METHODS = [
+    { id: "tabicl_esm",  slot: 1, dp: 3, name: "TabICLv2 + ESM",   ours: true },
+    { id: "tabicl",      slot: 2, dp: 3, name: "TabICLv2, no pLM", ours: true },
+    { id: "plmnn",       slot: 3, dp: 2, name: "pLM-NN" },
+    { id: "p2rank",      slot: 4, dp: 2, name: "P2Rank" },
+    { id: "pocketminer", slot: 5, dp: 2, name: "PocketMiner" }
+  ];
+
+  var SUBSETS = [
+    { id: "full",  name: "CB-full",          sub: "231 apo structures" },
+    { id: "p2apo", name: "CB-P2RANK-apo",    sub: "184 single-chain apo" },
+    { id: "pm",    name: "CB-PM",            sub: "PocketMiner-runnable" },
+    { id: "holo",  name: "CB-P2RANK-holo",   sub: "holo input — different task", flag: true }
+  ];
+
+  // value = null  →  method not evaluated on that subset
+  var DATA = {
+    full: {
+      tabicl_esm:  { auprc: 0.480, auc: 0.882, mcc: 0.414, f1: 0.922, tpr: 0.595, fpr: 0.062 },
+      tabicl:      { auprc: 0.453, auc: 0.868, mcc: 0.391, f1: 0.919, tpr: 0.567, fpr: 0.063 },
+      plmnn:       { auprc: 0.36,  auc: 0.86,  mcc: 0.39,  f1: 0.92,  tpr: 0.48,  fpr: 0.05  }
+    },
+    p2apo: {
+      tabicl_esm:  { auprc: 0.504, auc: 0.884, mcc: 0.429, f1: 0.923, tpr: 0.606, fpr: 0.061 },
+      tabicl:      { auprc: 0.473, auc: 0.867, mcc: 0.404, f1: 0.919, tpr: 0.570, fpr: 0.061 },
+      plmnn:       { auprc: 0.42,  auc: 0.88,  mcc: 0.43,  f1: 0.93,  tpr: 0.51,  fpr: 0.04  },
+      p2rank:      { auprc: 0.21,  auc: 0.81,  mcc: 0.27,  f1: 0.81,  tpr: 0.62,  fpr: 0.14  }
+    },
+    pm: {
+      plmnn:       { auprc: 0.43,  auc: 0.88,  mcc: 0.44,  f1: 0.93,  tpr: 0.52,  fpr: 0.04  },
+      pocketminer: { auprc: 0.19,  auc: 0.76,  mcc: 0.22,  f1: 0.78,  tpr: 0.51,  fpr: 0.16  }
+    },
+    holo: {
+      p2rank:      { auprc: 0.34,  auc: 0.89,  mcc: 0.38,  f1: 0.81,  tpr: 0.84,  fpr: 0.15  }
+    }
+  };
+
+  var METRICS = [
+    { key: "auprc", label: "AUPRC", max: 0.6, ticks: [0, 0.2, 0.4, 0.6],
+      note: "The metric that separates the methods. With ESM the margin over pLM-NN is +0.120 on CB-full and +0.084 on CB-P2RANK-apo — far wider than the AUC gap below suggests." },
+    { key: "auc", label: "AUC", max: 1.0, ticks: [0, 0.25, 0.5, 0.75, 1.0],
+      note: "Everything clusters between 0.76 and 0.89. AUC flatters this task because 95 % of residues are trivial negatives; treat it as a sanity check, not a ranking." },
+    { key: "mcc", label: "MCC", max: 0.5, ticks: [0, 0.25, 0.5],
+      note: "Threshold-dependent, so it reads each method at its own chosen operating point. Ours and pLM-NN are level on CB-P2RANK-apo (0.429 vs 0.43); the structure-only tools sit far below." },
+    { key: "f1", label: "F1 (weighted)", max: 1.0, ticks: [0, 0.25, 0.5, 0.75, 1.0],
+      note: "Computed the way the paper computes it — a weighted average over both classes — so at 5.28 % positives it is governed by the 95 % of residues that are trivially negative. Every pLM-based row lands at 0.92–0.93; the column separates the structure-only tools and nothing else." },
+    { key: "tpr", label: "TPR", max: 1.0, ticks: [0, 0.25, 0.5, 0.75, 1.0],
+      note: "Recall alone is not a result — P2Rank's 0.62 and 0.84 are bought with the false-positive rates in the next panel. Read the two panels as one pair." },
+    { key: "fpr", label: "FPR", max: 0.2, ticks: [0, 0.05, 0.1, 0.15, 0.2], lower: true,
+      note: "This is where P2Rank and PocketMiner pay for their recall — 0.14–0.16 against our 0.06. Our threshold was frozen on training folds targeting 0.05 and landed at 0.062 on test." }
+  ];
+
+  var W = 960, PL = 48, PR = 14, PT = 22, PB = 52, BAR = 24;
+  var PLOTW = W - PL - PR;
+  var GW = PLOTW / SUBSETS.length;
+  var SLOTW = GW / METHODS.length;
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  function el(tag, attrs) {
+    var n = document.createElementNS(SVGNS, tag);
+    for (var k in attrs) if (attrs[k] !== undefined && attrs[k] !== null) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+  function txt(tag, attrs, s) { var n = el(tag, attrs); n.appendChild(document.createTextNode(s)); return n; }
+  function fmt(v, dp) { return (v === null || v === undefined) ? "\u2014" : v.toFixed(dp); }
+
+  /* ---------- legend ---------- */
+  var lg = document.getElementById("legend");
+  METHODS.forEach(function (m) {
+    var d = document.createElement("div");
+    d.className = "legend-item";
+    var sw = document.createElement("span");
+    sw.className = "swatch s" + m.slot;
+    d.appendChild(sw);
+    var nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = m.name;
+    d.appendChild(nm);
+    var tg = document.createElement("span");
+    tg.className = "tag" + (m.ours ? " ours" : "");
+    tg.textContent = m.ours ? "this work" : "benchmark";
+    d.appendChild(tg);
+    lg.appendChild(d);
+  });
+
+  /* ---------- tooltip ---------- */
+  var tip = document.getElementById("tip");
+  function showTip(ev, method, subset, metric, val) {
+    tip.textContent = "";
+    var v = document.createElement("div");
+    v.className = "tv";
+    v.textContent = (val === null || val === undefined) ? "not evaluated" : val.toFixed(method.dp);
+    tip.appendChild(v);
+    var m = document.createElement("div");
+    m.className = "tm";
+    var k = document.createElement("span");
+    k.className = "key";
+    k.style.background = "var(--series-" + method.slot + ")";
+    m.appendChild(k);
+    var mn = document.createElement("span");
+    mn.textContent = method.name;
+    m.appendChild(mn);
+    tip.appendChild(m);
+    var s = document.createElement("div");
+    s.className = "ts";
+    s.textContent = metric.label + (metric.lower ? " (lower is better)" : "") + " · " + subset.name;
+    tip.appendChild(s);
+    tip.style.opacity = "1";
+    place(ev);
+  }
+  function place(ev) {
+    var r = tip.getBoundingClientRect();
+    var x = ev.clientX + 16, y = ev.clientY - r.height - 12;
+    if (x + r.width > window.innerWidth - 10) x = ev.clientX - r.width - 16;
+    if (y < 8) y = ev.clientY + 20;
+    tip.style.left = Math.max(8, x) + "px";
+    tip.style.top = y + "px";
+  }
+  function hideTip() { tip.style.opacity = "0"; }
+
+  /* ---------- panels ---------- */
+  var host = document.getElementById("panels");
+
+  METRICS.forEach(function (metric) {
+    var fig = document.createElement("figure");
+    fig.className = "panel";
+
+    var head = document.createElement("div");
+    head.className = "panel-head";
+    var h = document.createElement("h2");
+    h.textContent = metric.label;
+    head.appendChild(h);
+    if (metric.lower) {
+      var dir = document.createElement("span");
+      dir.className = "dir";
+      dir.textContent = "↓ lower is better";
+      head.appendChild(dir);
+    }
+    var p = document.createElement("p");
+    p.textContent = metric.note;
+    head.appendChild(p);
+    fig.appendChild(head);
+
+    var scroll = document.createElement("div");
+    scroll.className = "plot-scroll";
+    var H = 250, base = H - PB;
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img" });
+    svg.appendChild(txt("title", {}, metric.label + " by method and CryptoBench subset"));
+
+    // flagged-subset background band
+    SUBSETS.forEach(function (s, si) {
+      if (!s.flag) return;
+      svg.appendChild(el("rect", { class: "band", x: PL + si * GW + 2, y: PT - 8, width: GW - 4, height: base - PT + 8, rx: 3 }));
+    });
+
+    // gridlines + y ticks
+    var scale = function (v) { return base - (v / metric.max) * (base - PT); };
+    metric.ticks.forEach(function (t) {
+      var y = scale(t);
+      if (t > 0) svg.appendChild(el("line", { class: "grid-line", x1: PL, y1: y, x2: W - PR, y2: y }));
+      svg.appendChild(txt("text", { class: "tick", x: PL - 10, y: y + 3.5, "text-anchor": "end" }, t.toFixed(2)));
+    });
+    svg.appendChild(el("line", { class: "axis-line", x1: PL, y1: base, x2: W - PR, y2: base }));
+
+    // bars
+    SUBSETS.forEach(function (s, si) {
+      var gx = PL + si * GW;
+
+      METHODS.forEach(function (m, mi) {
+        var row = DATA[s.id][m.id];
+        var val = row ? row[metric.key] : null;
+        var cx = gx + mi * SLOTW + SLOTW / 2;
+        var g = el("g", {});
+
+        if (val === null || val === undefined) {
+          g.appendChild(txt("text", { class: "nolabel", x: cx, y: base - 6, "text-anchor": "middle" }, "–"));
+        } else {
+          var y = scale(val), hgt = base - y, x = cx - BAR / 2, r = Math.min(4, hgt);
+          var d = "M" + x + " " + base + " V" + (y + r) +
+                  " Q" + x + " " + y + " " + (x + r) + " " + y +
+                  " H" + (x + BAR - r) +
+                  " Q" + (x + BAR) + " " + y + " " + (x + BAR) + " " + (y + r) +
+                  " V" + base + " Z";
+          g.appendChild(el("path", { class: "bar s" + m.slot, d: d }));
+          g.appendChild(txt("text", { class: "vlabel", x: cx, y: y - 7, "text-anchor": "middle" },
+                            val.toFixed(m.dp)));
+        }
+
+        // hit target spans the whole slot column
+        var has = (val !== null && val !== undefined);
+        var hit = el("rect", { class: "hit", x: cx - SLOTW / 2, y: PT - 10, width: SLOTW, height: base - PT + 10,
+                               tabindex: has ? "0" : null, role: has ? "img" : null,
+                               "aria-hidden": has ? null : "true" });
+        hit.appendChild(txt("title", {}, m.name + " \u00b7 " + s.name + " \u00b7 " + metric.label + " " + fmt(val, m.dp)));
+        (function (mm, ss, vv) {
+          hit.addEventListener("pointerenter", function (e) { showTip(e, mm, ss, metric, vv); });
+          hit.addEventListener("pointermove", place);
+          hit.addEventListener("pointerleave", hideTip);
+          hit.addEventListener("focus", function (e) {
+            var b = hit.getBoundingClientRect();
+            showTip({ clientX: b.left + b.width / 2, clientY: b.bottom }, mm, ss, metric, vv);
+          });
+          hit.addEventListener("blur", hideTip);
+        })(m, s, val);
+
+        g.insertBefore(hit, g.firstChild);
+        svg.appendChild(g);
+      });
+
+      // group labels
+      svg.appendChild(txt("text", { class: "glabel", x: gx + GW / 2, y: base + 20, "text-anchor": "middle" }, s.name));
+      svg.appendChild(txt("text", { class: "gsub" + (s.flag ? " flag" : ""), x: gx + GW / 2, y: base + 36, "text-anchor": "middle" }, s.sub));
+    });
+
+    scroll.appendChild(svg);
+    fig.appendChild(scroll);
+    host.appendChild(fig);
+  });
+
+  /* ---------- table view ---------- */
+  var tbl = document.getElementById("tbl");
+  var cap = document.createElement("caption");
+  cap.textContent = "All measured values. Em dash = the method was not evaluated on that subset.";
+  tbl.appendChild(cap);
+
+  var thead = document.createElement("thead");
+  var hr = document.createElement("tr");
+  ["Method", "Subset"].concat(METRICS.map(function (m) { return m.label + (m.lower ? " ↓" : ""); }))
+    .forEach(function (t) { var th = document.createElement("th"); th.scope = "col"; th.textContent = t; hr.appendChild(th); });
+  thead.appendChild(hr);
+  tbl.appendChild(thead);
+
+  var tbody = document.createElement("tbody");
+  SUBSETS.forEach(function (s, si) {
+    var best = {};
+    METRICS.forEach(function (mt) {
+      var vals = METHODS.map(function (m) { return DATA[s.id][m.id] ? DATA[s.id][m.id][mt.key] : null; })
+                        .filter(function (v) { return v !== null && v !== undefined; });
+      if (vals.length > 1) best[mt.key] = mt.lower ? Math.min.apply(null, vals) : Math.max.apply(null, vals);
+    });
+    var seenInSubset = false;
+    METHODS.forEach(function (m, mi) {
+      var row = DATA[s.id][m.id];
+      if (!row) return;
+      var tr = document.createElement("tr");
+      if (m.ours) tr.className = "ours";
+      if (si > 0 && !seenInSubset) { tr.classList.add("subset-start"); seenInSubset = true; }
+      var td1 = document.createElement("td");
+      var wrapk = document.createElement("span");
+      wrapk.className = "mkey";
+      var sw = document.createElement("span");
+      sw.className = "swatch s" + m.slot;
+      sw.style.width = "10px"; sw.style.height = "10px";
+      wrapk.appendChild(sw);
+      wrapk.appendChild(document.createTextNode(m.name));
+      td1.appendChild(wrapk);
+      tr.appendChild(td1);
+      var td2 = document.createElement("td");
+      td2.textContent = s.name + (s.flag ? " ⚠" : "");
+      tr.appendChild(td2);
+      METRICS.forEach(function (mt) {
+        var td = document.createElement("td");
+        var v = row[mt.key];
+        td.textContent = fmt(v, m.dp);
+        if (best[mt.key] !== undefined && v === best[mt.key]) td.className = "best";
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  });
+  tbl.appendChild(tbody);
+
+  var LADDER = [
+    { feat: 118, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.4729, auc: 0.8749, mcc: 0.3929, tpr: 0.4954, fpr: 0.04286 }, rf: { auprc: 0.442, auc: 0.8625, mcc: 0.3511, tpr: 0.7277, fpr: 0.159 }, tabicl: { auprc: 0.48, auc: 0.8819, mcc: 0.4142, tpr: 0.5952, fpr: 0.06174 } } },
+    { feat: 118, regime: "full 304k train", models: { lr: { auprc: 0.4705, auc: 0.8749, mcc: 0.4054, tpr: 0.5253, fpr: 0.05414 }, rf: { auprc: 0.4492, auc: 0.8616, mcc: 0.2258, tpr: 0.187, fpr: 0.008405 } } },
+    { feat: 86, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.472, auc: 0.8724, mcc: 0.3892, tpr: 0.4967, fpr: 0.04309 }, rf: { auprc: 0.446, auc: 0.8613, mcc: 0.3543, tpr: 0.7168, fpr: 0.1509 }, tabicl: { auprc: 0.4802, auc: 0.8793, mcc: 0.4045, tpr: 0.5922, fpr: 0.06298 } } },
+    { feat: 86, regime: "full 304k train", models: { lr: { auprc: 0.4684, auc: 0.8717, mcc: 0.3999, tpr: 0.5187, fpr: 0.05187 }, rf: { auprc: 0.4477, auc: 0.8597, mcc: 0.2396, tpr: 0.2125, fpr: 0.01048 } } },
+    { feat: 70, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.4568, auc: 0.8643, mcc: 0.3754, tpr: 0.4712, fpr: 0.04086 }, rf: { auprc: 0.4414, auc: 0.8592, mcc: 0.3498, tpr: 0.6984, fpr: 0.1448 }, tabicl: { auprc: 0.4686, auc: 0.8741, mcc: 0.3969, tpr: 0.5741, fpr: 0.06278 } } },
+    { feat: 70, regime: "full 304k train", models: { lr: { auprc: 0.4521, auc: 0.8632, mcc: 0.3864, tpr: 0.4881, fpr: 0.04941 }, rf: { auprc: 0.4423, auc: 0.8568, mcc: 0.2507, tpr: 0.2233, fpr: 0.01144 } } },
+    { feat: 54, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.4409, auc: 0.8547, mcc: 0.362, tpr: 0.4568, fpr: 0.04125 }, rf: { auprc: 0.4346, auc: 0.8559, mcc: 0.3477, tpr: 0.6851, fpr: 0.1408 }, tabicl: { auprc: 0.4531, auc: 0.8678, mcc: 0.3909, tpr: 0.5667, fpr: 0.06317 } } },
+    { feat: 54, regime: "full 304k train", models: { lr: { auprc: 0.4366, auc: 0.8534, mcc: 0.3707, tpr: 0.4745, fpr: 0.05119 }, rf: { auprc: 0.4317, auc: 0.8534, mcc: 0.2686, tpr: 0.245, fpr: 0.0131 } } },
+    { feat: 48, regime: "50k context, fixed sampler", models: { tabicl: { auprc: 0.4359, auc: 0.862, mcc: 0.3707, tpr: 0.5493, fpr: 0.06557 } } },
+    { feat: 48, regime: "50k context, old sampler", models: { lr: { auprc: 0.3329, auc: 0.8267, mcc: 0.1945, tpr: 0.1985, fpr: 0.02188 }, rf: { auprc: 0.299, auc: 0.8215, mcc: 0.2829, tpr: 0.624, fpr: 0.1565 } } },
+    { feat: 48, regime: "full 304k train", models: { lr: { auprc: 0.4172, auc: 0.8466, mcc: 0.3414, tpr: 0.4511, fpr: 0.04965 }, rf: { auprc: 0.3964, auc: 0.8394, mcc: 0.2437, tpr: 0.2292, fpr: 0.01274 } } },
+    { feat: 34, regime: "50k context, old sampler", models: { lr: { auprc: 0.324, auc: 0.8134, mcc: 0.2045, tpr: 0.2066, fpr: 0.02267 }, rf: { auprc: 0.3124, auc: 0.8197, mcc: 0.2749, tpr: 0.5823, fpr: 0.1397 }, tabicl: { auprc: 0.3239, auc: 0.8296, mcc: 0.2771, tpr: 0.4411, fpr: 0.0769 } } },
+    { feat: 34, regime: "full 304k train", models: { lr: { auprc: 0.4128, auc: 0.8339, mcc: 0.3461, tpr: 0.4547, fpr: 0.0505 }, rf: { auprc: 0.418, auc: 0.8398, mcc: 0.2582, tpr: 0.2579, fpr: 0.01549 } } }
+  ];
+
+  var FAMS = [
+    { id: "tabicl", slot: 1, name: "TabICLv2 zero-shot" },
+    { id: "lr",     slot: 2, name: "LogisticRegression" },
+    { id: "rf",     slot: 3, name: "RandomForest" }
+  ];
+  var LCOLS = [
+    { key: "auprc", label: "AUPRC", lo: 0.28, hi: 0.50, ticks: [.30, .35, .40, .45], ref: 0.36 },
+    { key: "auc",   label: "AUC",   lo: 0.80, hi: 0.89, ticks: [.82, .84, .86, .88], ref: 0.86 },
+    { key: "mcc",   label: "MCC",   lo: 0.17, hi: 0.43, ticks: [.20, .25, .30, .35, .40], ref: 0.39 }
+  ];
+  var LMETRICS = [["auprc", "AUPRC"], ["auc", "AUC"], ["mcc", "MCC"], ["tpr", "TPR"], ["fpr", "FPR"]];
+
+  (function renderLadder() {
+    FAMS.forEach(function (f) {
+      var d = document.createElement("div");
+      d.className = "legend-item";
+      var sw = document.createElement("span");
+      sw.className = "swatch s" + f.slot;
+      sw.style.borderRadius = "50%";
+      d.appendChild(sw);
+      var nm = document.createElement("span");
+      nm.className = "nm";
+      nm.textContent = f.name;
+      d.appendChild(nm);
+      document.getElementById("ladder-legend").appendChild(d);
+    });
+
+    var LW = 1000, LABW = 252, PW = 212, GAP = 26, X0 = LABW + 12;
+    var TOP = 62, ROWH = 30, H = TOP + LADDER.length * ROWH + 46;
+    var svg = document.getElementById("ladder-svg");
+    svg.setAttribute("viewBox", "0 0 " + LW + " " + H);
+    svg.setAttribute("role", "img");
+    svg.appendChild(txt("title", {}, "AUPRC, AUC and MCC for every model configuration on CB-full"));
+    var bottom = TOP + LADDER.length * ROWH;
+
+    // row labels
+    LADDER.forEach(function (row, i) {
+      var y = TOP + i * ROWH + ROWH / 2 + 4;
+      svg.appendChild(txt("text", { class: "rowfeat", x: LABW - 6, y: y, "text-anchor": "end" },
+                          row.feat + " feat"));
+      svg.appendChild(txt("text", { class: "rowreg", x: LABW - 6, y: y + 13, "text-anchor": "end" },
+                          row.regime));
+    });
+
+    LCOLS.forEach(function (col, ci) {
+      var gx = X0 + ci * (PW + GAP);
+      var sx = function (v) { return gx + ((v - col.lo) / (col.hi - col.lo)) * PW; };
+
+      svg.appendChild(txt("text", { class: "colhead", x: gx, y: 22 }, col.label));
+      col.ticks.forEach(function (t) {
+        svg.appendChild(el("line", { class: "grid-line", x1: sx(t), y1: TOP - 8, x2: sx(t), y2: bottom }));
+        svg.appendChild(txt("text", { class: "tick", x: sx(t), y: bottom + 18, "text-anchor": "middle" },
+                            t.toFixed(2)));
+      });
+      svg.appendChild(el("line", { class: "axis-line", x1: gx, y1: bottom, x2: gx + PW, y2: bottom }));
+      svg.appendChild(el("line", { class: "refline", x1: sx(col.ref), y1: TOP - 14, x2: sx(col.ref), y2: bottom }));
+      svg.appendChild(txt("text", { class: "reflabel", x: sx(col.ref) + 4, y: TOP - 18 }, "pLM-NN"));
+
+      LADDER.forEach(function (row, i) {
+        var y = TOP + i * ROWH + ROWH / 2;
+        var vals = FAMS.map(function (f) { return row.models[f.id] ? row.models[f.id][col.key] : null; })
+                       .filter(function (v) { return v !== null && v !== undefined; });
+        if (vals.length > 1) {
+          svg.appendChild(el("line", { class: "strip", x1: sx(Math.min.apply(null, vals)), y1: y,
+                                       x2: sx(Math.max.apply(null, vals)), y2: y }));
+        }
+        FAMS.forEach(function (f) {
+          var m = row.models[f.id];
+          if (!m || m[col.key] === null || m[col.key] === undefined) return;
+          var cx = sx(m[col.key]);
+          var dot = el("circle", { class: "dot fam" + f.slot, cx: cx, cy: y, r: 5 });
+          svg.appendChild(dot);
+          var hit = el("circle", { class: "dot-hit", cx: cx, cy: y, r: 13, tabindex: "0", role: "img" });
+          hit.appendChild(txt("title", {}, f.name + " · " + row.feat + " feat, " + row.regime +
+                                          " · " + col.label + " " + m[col.key].toFixed(3)));
+          (function (fam, r2, mm) {
+            function show(ev) {
+              dot.setAttribute("r", "7");
+              tip.textContent = "";
+              var v = document.createElement("div");
+              v.className = "tv";
+              v.textContent = mm[col.key].toFixed(3);
+              tip.appendChild(v);
+              var mrow = document.createElement("div");
+              mrow.className = "tm";
+              var k = document.createElement("span");
+              k.className = "key";
+              k.style.background = "var(--series-" + fam.slot + ")";
+              mrow.appendChild(k);
+              var nm2 = document.createElement("span");
+              nm2.textContent = fam.name;
+              mrow.appendChild(nm2);
+              tip.appendChild(mrow);
+              var st = document.createElement("div");
+              st.className = "ts";
+              st.textContent = col.label + " · " + r2.feat + " feat · " + r2.regime;
+              tip.appendChild(st);
+              tip.style.opacity = "1";
+              place(ev);
+            }
+            hit.addEventListener("pointerenter", show);
+            hit.addEventListener("pointermove", place);
+            hit.addEventListener("pointerleave", function () { dot.setAttribute("r", "5"); hideTip(); });
+            hit.addEventListener("focus", function () {
+              var b = hit.getBoundingClientRect();
+              show({ clientX: b.left + b.width / 2, clientY: b.bottom });
+            });
+            hit.addEventListener("blur", function () { dot.setAttribute("r", "5"); hideTip(); });
+          })(f, row, m);
+          svg.appendChild(hit);
+        });
+      });
+    });
+
+    // table view
+    var lt = document.getElementById("ladder-tbl");
+    var cap = document.createElement("caption");
+    cap.textContent = "Every configuration on CB-full. TPR / FPR / MCC read each model at its own selected threshold. " +
+                      "RSA alone, the single-feature floor, sits below the cropped axes at AUPRC 0.089 / AUC 0.499 / MCC 0.034.";
+    lt.appendChild(cap);
+    var th = document.createElement("thead"), hr2 = document.createElement("tr");
+    ["Model", "Features", "Negatives"].concat(LMETRICS.map(function (m) { return m[1]; }))
+      .forEach(function (t) { var c = document.createElement("th"); c.scope = "col"; c.textContent = t; hr2.appendChild(c); });
+    th.appendChild(hr2); lt.appendChild(th);
+    var tb = document.createElement("tbody");
+    LADDER.forEach(function (row, i) {
+      FAMS.forEach(function (f, fi) {
+        var m = row.models[f.id];
+        if (!m) return;
+        var tr = document.createElement("tr");
+        if (i > 0 && fi === 0) tr.className = "subset-start";
+        var c0 = document.createElement("td");
+        var w = document.createElement("span");
+        w.className = "mkey";
+        var sw = document.createElement("span");
+        sw.className = "swatch s" + f.slot;
+        sw.style.width = "10px"; sw.style.height = "10px"; sw.style.borderRadius = "50%";
+        w.appendChild(sw);
+        w.appendChild(document.createTextNode(f.name));
+        c0.appendChild(w); tr.appendChild(c0);
+        var c1 = document.createElement("td"); c1.textContent = row.feat; tr.appendChild(c1);
+        var c2 = document.createElement("td"); c2.textContent = row.regime; tr.appendChild(c2);
+        LMETRICS.forEach(function (mm) {
+          var td = document.createElement("td");
+          td.textContent = (m[mm[0]] === null || m[mm[0]] === undefined) ? "\u2014" : m[mm[0]].toFixed(3);
+          tr.appendChild(td);
+        });
+        tb.appendChild(tr);
+      });
+    });
+    lt.appendChild(tb);
+  })();
+
+  /* ---------- notes ---------- */
+  var NOTES = [
+    ["CB-PM", "Neither TabICL row appears on CB-PM, and that gap cannot be closed from the shipped data. The subset is defined by which 60 structures PocketMiner failed to run on — a property of that tool's run, not of the dataset. Reconstructing it means asking the CryptoBench authors for the structure list."],
+    ["CB-P2RANK-holo", "Shaded because it is a different task, not a harder split. P2Rank sees the ligand-bound (holo) structure, where the pocket is already open. It is included for completeness and must not be read as a fifth column of apo results."],
+    ["The F1 column", "The paper computes F1 \u201cusing a weighted average\u201d over both classes, which is why pLM-NN\u2019s published F1 (0.92) tracks its ACC (0.93) rather than its TPR (0.48). Ours is computed identically \u2014 per structure, weighted, then averaged \u2014 so the bars are directly comparable. Our positive-class F1, the number that actually carries information, is 0.418 (118 feat) and 0.399 (54 feat) on CB-full; it is not comparable to this column and is deliberately not plotted beside it. Reproduce with scripts/f1_by_subset.py."],
+    ["Thresholds", "Not a benchmark constant. pLM-NN used 0.95, PocketMiner 0.7, P2Rank emits binary calls with no threshold at all, and ours was selected on training folds targeting FPR 0.05. TPR, FPR and MCC therefore compare operating points each method chose for itself; AUC and AUPRC are threshold-free and compare rankings."],
+    ["Comparability", "All rows are per-structure-then-averaged on CryptoBench's own test split — 231 apo structures, 76,636 residues, 5.28 % positive — matching the paper's Protein.py. CB-P2RANK-apo is the cleanest of the two apo columns for us: on that subset our evaluation unit and pLM-NN's are identical by construction."],
+    ["Why LR and RF are not in the bars", "Our sklearn controls were evaluated on CB-full only, and the stored artifacts keep summary metrics rather than per-residue scores, so they cannot be re-scored on CB-P2RANK-apo. Adding them to the subset bars would have meant two more colour channels standing empty on three of four subsets. The dot strip is the honest form for them. Three configurations quoted in RESULTS.md have no stored artifact and are absent from it: TabICL 48 feat / old sampler, LogisticRegression 48 feat / fixed sampler, and TabICL \u00d75 contexts."],
+    ["TabICL has no full-304k row", "Not an omission \u2014 304k labelled rows do not fit in an in-context window. That is the ceiling itself: LogisticRegression trained on all 304k reaches AUPRC 0.471, level with TabICL\u2019s in-context 0.480, which is why the features rather than the model carry this result."],
+    ["What is not shown", "Both TabICL rows are zero-shot: no gradient step is taken on CryptoBench, and the ESM features are frozen embeddings rather than a fine-tuned network. The 54-feature row uses no protein language model at all, which makes it the stronger claim even though the 118-feature row is the better predictor."]
+  ];
+  var nh = document.getElementById("notes");
+  NOTES.forEach(function (n, i) {
+    var d = document.createElement("div");
+    d.className = "note";
+    var num = document.createElement("span");
+    num.className = "n";
+    num.textContent = String(i + 1).padStart(2, "0");
+    d.appendChild(num);
+    var body = document.createElement("span");
+    var st = document.createElement("strong");
+    st.textContent = n[0] + " — ";
+    body.appendChild(st);
+    body.appendChild(document.createTextNode(n[1]));
+    d.appendChild(body);
+    nh.appendChild(d);
+  });
+})();
+</script>
