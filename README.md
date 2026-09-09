@@ -9,6 +9,9 @@ unbound state but opens on ligand binding.
 
 This project is self-contained and shares no code with the PPO/HOP project.
 
+Full measurements, ablations and confidence intervals: **[RESULTS.md](RESULTS.md)**.
+This file is the summary; RESULTS.md is the record.
+
 ---
 
 ## The task
@@ -17,117 +20,173 @@ This project is self-contained and shares no code with the PPO/HOP project.
 |---|---|
 | Unit of prediction | one **residue** of one apo chain |
 | Label | residue appears in `apo_pocket_selection` for any holo partner |
-| Rows | 380,930 residues across 1,135 apo structures |
-| Prevalence | 5.34% positive |
-| Features | 34, all computed from the **apo structure only** |
+| Rows | 381,189 residues across 1,136 apo structures |
+| Prevalence | 5.34% positive (5.28% on the test split) |
+| Features | 118 = 34 geometric + 14 ensemble-pocket + 6 conservation + 64 ESM-2 PCs |
 | Model | TabICLv2, zero-shot (no fitting, no fine-tuning) |
 | Splits | CryptoBench's own sequence-identity folds |
 
 ## Results
 
 Test set (231 proteins, 76,636 residues), metrics computed per protein then averaged,
-matching CryptoBench's `Protein.py`:
+matching CryptoBench's `Protein.py`. The decision threshold is selected on the training
+folds and frozen before the test set is touched.
 
-| Method | features | AUC | AUPRC | TPR | FPR | MCC |
-|---|---|---|---|---|---|---|
-| **TabICLv2 zero-shot** | 48 | **0.862** | **0.436** | 0.549 | 0.066 | 0.371 |
-| LogisticRegression, full train | 48 | 0.847 | 0.417 | 0.451 | 0.050 | 0.341 |
-| RandomForest, full train | 34 | 0.840 | 0.418 | 0.258 | 0.015 | 0.258 |
-| RSA alone (floor) | 1 | 0.499 | 0.089 | — | — | — |
-| *pLM-NN, CB-full (published)* | — | *0.86* | *0.36* | *0.48* | *0.05* | *0.39* |
-| *P2Rank apo, subset (published)* | — | *0.81* | *0.21* | *0.62* | *0.14* | *0.27* |
-| *PocketMiner, subset (published)* | — | *0.76* | *0.19* | *0.51* | *0.16* | *0.22* |
+| metric | 118 feat (+ESM) | 54 feat (no pLM) | pLM-NN (published, CB-full) |
+|---|---|---|---|
+| AUC | **0.882** | 0.867 | 0.86 |
+| AUPRC | **0.476** | 0.450 | 0.36 |
+| TPR | **0.591** | 0.565 | 0.48 |
+| FPR | 0.062 | 0.064 | 0.05 |
+| MCC | 0.410 | 0.389 | 0.39 |
+| F1 (weighted — the published convention) | 0.921 | 0.918 | 0.92 |
+| F1 (positive class) | 0.415 | 0.397 | — |
 
-Zero-shot TabICL matches pLM-NN on AUC (0.862 vs 0.86) and exceeds it on AUPRC
-(0.436 vs 0.36) and TPR (0.549 vs 0.48), at a somewhat looser FPR (0.066 vs 0.05) and
-slightly lower MCC (0.371 vs 0.39). It does so with 48 hand-crafted apo-only structural
-descriptors, no protein language model, and no training of any kind.
+No training of any kind: the labelled context is a single forward pass, and the ESM
+features are frozen embeddings, not a fine-tuned network. No holo structure at
+prediction time.
+
+**Both rows are worth keeping.** The 54-feature row is the stronger claim — it beats
+pLM-NN on CB-full using no protein language model at all. The 118-feature row is the
+better predictor. They answer different questions and neither supersedes the other.
 
 Only the CB-full row is comparable: our evaluation covers all 231 test proteins, whereas
 the published P2Rank and PocketMiner figures are on subsets those tools could run on.
-Do not compare ACC or F1 across the two tables — the published F1 of 0.92 cannot be
-positive-class F1 at 5% prevalence (that would be ~0.40), so it is weighted or macro,
-while ours is positive-class.
+CB-P2RANK-apo (the 184 single-chain test structures) *is* reconstructible and we report
+it too — see RESULTS.md § 2. CB-PM is not: it is defined by which structures PocketMiner
+happened to run on.
 
-Pooled (rather than per-protein) AUC 0.879, AUPRC 0.380.
+### Which margins survive resampling
 
-Inner CV on the train folds, used only to freeze the threshold at 0.5425:
+Each metric is a mean over per-protein values, so a CI comes free — resample the 231
+test proteins with replacement and re-average (`python scripts/bootstrap_test.py`,
+10,000 draws). Doing that changes what may be claimed:
 
-| fold | AUC | AUPRC |
+- **AUPRC and TPR are the real result.** pLM-NN's published values sit below our
+  interval on both metrics and both subsets.
+- **The AUC lead does not survive.** On CB-P2RANK-apo the +0.005 margin sits inside a
+  ±0.022 interval. Do not report it as a lead.
+- **MCC is not resolved anywhere.** pLM-NN's value is inside every interval.
+- **Two gaps run against us and are significant**: our FPR is genuinely higher (0.062
+  vs 0.05 — threshold transfer), and on CB-P2RANK-apo pLM-NN's weighted F1 of 0.93
+  sits above our interval.
+
+The context draw is a much smaller source of uncertainty than the test set: over 12
+TabICL context seeds the draw moves AUC by sd 0.0006 and AUPRC by sd 0.0030, roughly
+20–30× tighter than the test-set intervals (RESULTS.md § 4.6).
+
+Inner CV on the train folds, used only to freeze the threshold (at 0.5677 for the
+118-feature run, 0.5527 for the 54-feature run):
+
+| fold | 54 feat AUC / AUPRC | 118 feat AUC / AUPRC |
 |---|---|---|
-| train-fold-0 | 0.830 | 0.391 |
-| train-fold-1 | 0.859 | 0.463 |
-| train-fold-2 | 0.838 | 0.421 |
-| train-fold-3 | 0.834 | 0.424 |
+| train-fold-0 | 0.835 / 0.404 | 0.845 / 0.431 |
+| train-fold-1 | 0.863 / 0.479 | 0.878 / 0.506 |
+| train-fold-2 | 0.844 / 0.441 | 0.854 / 0.460 |
+| train-fold-3 | 0.838 / 0.433 | 0.850 / 0.456 |
 
-Reproduce the table with `python scripts/compare_variants.py`.
+Fold spread is ~0.03 AUC, so no single fold carries the result.
 
-pLM-NN uses protein-language-model embeddings and is trained. This uses 34
-hand-crafted geometric and physicochemical descriptors and performs no training —
-the labelled context is a single forward pass.
-
-Inner 4-fold CV over the train folds, used only to pick the decision threshold
-(frozen at 0.5157 before touching test):
-
-| fold | AUC | AUPRC |
-|---|---|---|
-| train-fold-0 | 0.805 | 0.320 |
-| train-fold-1 | 0.839 | 0.379 |
-| train-fold-2 | 0.814 | 0.346 |
-| train-fold-3 | 0.823 | 0.351 |
-
-Fold spread is narrow (AUC 0.805–0.839), so no single fold carries the result.
-The frozen threshold gives FPR 0.08 on test against the 0.05 it was tuned for —
-the honest cost of not tuning on the test set.
+Reproduce the full table with `python scripts/compare_variants.py`.
 
 ### Control: the same features with conventional models
 
 Everything held fixed except the model — same table, same folds, same threshold rule,
 same per-protein averaging:
 
-| Method | context | AUC | AUPRC |
-|---|---|---|---|
-| RandomForest | full 304k train | **0.841** | **0.419** |
-| LogisticRegression | full 304k train | 0.834 | 0.413 |
-| **TabICLv2 zero-shot** | 50k subsample | 0.830 | 0.320 |
-| RandomForest | same 50k subsample | 0.819 | 0.315 |
-| LogisticRegression | same 50k subsample | 0.813 | 0.324 |
-| RSA alone | — | 0.499 | 0.089 |
+| Method | features | context | AUC | AUPRC |
+|---|---|---|---|---|
+| **TabICLv2 zero-shot** | 118 | 50k subsample | **0.882** | **0.476** |
+| LogisticRegression | 118 | full 304k train | 0.875 | 0.470 |
+| RandomForest | 118 | full 304k train | 0.863 | 0.448 |
+| **TabICLv2 zero-shot** | 54 | 50k subsample | **0.867** | **0.450** |
+| RandomForest | 54 | same 50k subsample | 0.855 | 0.432 |
+| LogisticRegression | 54 | same 50k subsample | 0.854 | 0.439 |
+| LogisticRegression | 54 | full 304k train | 0.854 | 0.437 |
+| RandomForest | 54 | full 304k train | 0.853 | 0.434 |
+| RSA alone (floor) | 1 | — | 0.499 | 0.089 |
 
 Read honestly, this says three things:
 
-1. **The features carry the result, not the model.** At equal context TabICL (0.830)
-   is barely ahead of a RandomForest (0.819). The gap over P2Rank and PocketMiner is
-   attributable to the descriptors, not to in-context learning.
+1. **TabICL is modestly but consistently ahead**, at every feature count, and it stays
+   ahead of models that see all 304k training rows. The margin is ~0.01 AUC / ~0.02
+   AUPRC — real, but small next to what the features do.
 
-2. **TabICL's context ceiling costs real accuracy here.** A RandomForest that can see
-   all 304k training rows reaches AUPRC 0.419 — above both TabICL's 0.320 and the
-   published pLM-NN's 0.36. Subsampling to fit the context is discarding usable signal.
-   This is a structural limitation of applying an in-context model to a dataset with
-   ~300k rows, not a tuning problem.
+2. **The features still carry most of the result.** Holding model and sampler fixed,
+   TabICL goes 34 → 48 → 54 → 118 features for AUPRC 0.433 → 0.430 → 0.450 → 0.476.
+   Swapping the model at fixed features moves it by ~0.02. The gap over P2Rank and
+   PocketMiner is attributable mostly to the descriptors.
 
 3. **The task is genuinely multivariate.** RSA alone scores 0.499 — chance. No single
    descriptor solves this.
 
-So the defensible claim is not "TabICL is the right model for cryptic site prediction".
-It is "34 apo-only structural descriptors are competitive with a protein language model
-on CryptoBench, and TabICL reaches that level with no training at all — while a plain
-RandomForest with full data exceeds it."
+An earlier version of this README concluded the opposite — that TabICL's context
+ceiling cost real accuracy and a RandomForest on full data beat it. That reading was an
+artifact of a sampler bug; see *The context ceiling that wasn't* below.
 
 ### Where it is weak
 
-Stratifying the test set by whether a residue lines an already-open pocket:
+Stratifying the test set by whether a residue lines an already-open pocket
+(118-feature run):
 
 | stratum | residues | prevalence | AUC | AUPRC | TPR |
 |---|---|---|---|---|---|
-| elsewhere | 73,296 | 3.5% | 0.820 | 0.188 | 0.474 |
-| lines a non-cryptic pocket | 3,340 | 44.0% | 0.677 | 0.600 | 0.484 |
+| bulk surface | 73,296 | 3.5% | 0.879 | 0.257 | 0.482 |
+| lines a non-cryptic pocket | 3,340 | 44.0% | **0.714** | 0.635 | 0.942 |
 
-The model is clearly separating cryptic residues from bulk surface, but on residues
-that already line an open pocket it drops to AUC 0.677. That is the discrimination
-the task is actually about, and it is where the remaining headroom is — plausibly
-what CryptoSite's conformational-ensemble features (its single strongest signal)
-would address.
+The model separates cryptic residues from bulk surface well. On residues that already
+line an open pocket it drops to 0.714, and **that is the discrimination the task is
+actually about**. The stratum has resisted almost everything thrown at it:
+
+| run | feat | hard stratum | bulk surface | gap |
+|---|---|---|---|---|
+| Tier A | 34 | 0.667 | 0.824 | 0.157 |
+| + ensemble pocket features | 48 | 0.672 | 0.838 | 0.166 |
+| + conservation | 54 | 0.690 | 0.852 | 0.163 |
+| + ESM-16 | 70 | 0.705 | 0.867 | 0.162 |
+| + ESM-32 | 86 | 0.710 | 0.876 | 0.166 |
+| **+ ESM-64** | **118** | **0.714** | **0.879** | **0.165** |
+
+Every addition lifts both strata together — 34 → 118 features moves the hard stratum
++0.047 and bulk surface +0.055 — so the gap sits at 0.157–0.166 throughout and nothing
+has closed it. The descriptors are getting better at pocket-likeness in general rather
+than at crypticity in particular. Ensemble pocket features are the weakest of the three
+additions here (+0.005 on the hard stratum).
+
+**A caution about reading this table.** An earlier version of this section concluded
+that ESM *widened* the gap (0.152 → 0.164) and that a language model therefore "makes
+the model better at the part it was already good at". That does not survive
+re-measurement. The hard stratum holds 3,340 residues against bulk surface's 73,296, and
+recomputing per-stratum AUC across the 12 stored context seeds gives sd **0.0045** for
+the hard stratum against **0.0006** for bulk — seven times noisier — with the gap itself
+at sd 0.0043. A +0.012 movement read off two single draws was never distinguishable from
+resampling. See RESULTS.md § 5.1.
+
+---
+
+## What actually moved the number
+
+Ranked by effect on AUPRC (RESULTS.md § 4):
+
+| change | ΔAUPRC | cost |
+|---|---|---|
+| Fixing the negative sampler | **+0.113** | one line |
+| Fixing PDB column alignment | +0.144 *(on ensemble features alone)* | one line |
+| Adding 64 ESM-2 principal components | +0.026 | 0.06 A10G-hours (~$0.07) |
+| Adding 6 conservation features | +0.017 | ~2,300 API calls |
+| Adding 14 ensemble pocket features | +0.014 | ~28,000 fpocket runs |
+| Averaging over 5 contexts | +0.004 | 5× GPU inference |
+| Fixing the insertion-code key | −0.004 *(noise; 0 test rows changed)* | three lines |
+
+Three of the five largest entries are bugs in code written here; the deliberate
+capability additions are the smaller ones. ESM-2 was the best value per unit of compute
+— the largest of the three gains for a few minutes of A10G time (the real cost was
+baking an 11 GB checkpoint into the image, not running it).
+
+The insertion-code fix is listed for completeness rather than for its effect: it
+corrected 32 mislabelled residues and un-quarantined a protein, all of them in the
+training split, so the measured movement is smaller than the context-draw noise. See
+*Insertion codes* below.
 
 ---
 
@@ -136,8 +195,10 @@ would address.
 **1. Holo-derived features.** A cryptic site is *defined* by the apo→holo change, so
 any feature computed from the holo structure (Δdruggability, Δvolume, `pRMSD`)
 reconstructs the label almost perfectly — and is unavailable at prediction time, when
-only an apo structure exists. Every feature here comes from the apo structure alone,
-and `tests/test_no_leakage.py` fails the build if a holo-named column reaches `X`.
+only an apo structure exists. Every feature here is intended to come from the apo
+structure alone, and `tests/test_no_leakage.py` fails the build if a holo-named column
+reaches `X`. Note the guard is name-based: it catches columns *named* after holo
+quantities, not a holo-derived quantity under an innocuous name.
 
 **2. Random splits.** Residues within a protein are highly correlated and homologous
 proteins leak across a random split. We use CryptoBench's shipped folds, which are
@@ -146,7 +207,7 @@ splits.
 
 **3. Accuracy.** At 5.3% prevalence, predicting "never cryptic" scores 94.7%. We report
 AUC, AUPRC and TPR at a fixed low FPR instead. The decision threshold is chosen on
-training folds and frozen before touching the test set.
+training folds and frozen before the test set is touched.
 
 A fourth, subtler one: one apo structure maps to **5,493 holo pairings across 1,136
 structures** — about five each. Labelling from a single holo partner would mark genuine
@@ -154,10 +215,15 @@ cryptic residues as negatives. Labels are the union over all partners.
 
 ---
 
-## Features (Tier A)
+## Features
 
-All per-residue, all apo-only. Where CryptoSite gives an exact definition we use it
-verbatim:
+118 total, in four tiers. Every numeric feature in tiers A–C additionally gets its
+**8 Å spatial-neighbourhood mean** — CryptoSite found the neighbour-averaged variants
+rank among its most discriminative, because a cryptic site is a property of a surface
+patch rather than a lone residue.
+
+**Tier A — geometry and physicochemistry (34).** Where CryptoSite gives an exact
+definition we use it verbatim:
 
 - `packing` — atoms of other residues within 4 Å, divided by the residue's atom count
 - `n_neighbors_{4,6,8}A` — distinct residues within that distance
@@ -169,12 +235,21 @@ exposure, B-factor (raw and per-chain z), secondary structure from backbone dihe
 Kyte–Doolittle hydropathy, formal charge, relative sequence position, chain length, and
 a flag for residues lining an already-open (non-cryptic) pocket.
 
-Every numeric feature additionally gets its **8 Å spatial-neighbourhood mean** —
-CryptoSite found the neighbour-averaged variants rank among its most discriminative,
-because a cryptic site is a property of a surface patch rather than a lone residue.
-
 Solvent accessibility is a vectorised Shrake–Rupley implemented here (`freesasa` needs
 a C toolchain); ~0.5 s per structure.
+
+**Tier C — ensemble pocket scores (14).** 24 ANM normal-mode conformations per protein,
+fpocket on each, then CryptoSite's residue pocket score ("the maximum druggability
+score among the alpha spheres within 5 Å of the residue"). See *Tier C* below.
+
+**Conservation (6).** `cons_score`, `cons_entropy`, `cons_prob_self` and their
+neighbourhood means, from the PDBe Graph API — the same source the CryptoBench authors
+used for their own analysis. The join is on `label_seq_id`, not `auth_seq_id`; getting
+that wrong yields plausible, wrong values for a subset of structures.
+
+**ESM-2 (64).** `facebook/esm2_t36_3B_UR50D` — the same model pLM-NN uses — reduced from
+2,560 dims by PCA. The projection is fit on **train rows only**, so no held-out protein
+influences the basis.
 
 ---
 
@@ -182,16 +257,47 @@ a C toolchain); ~0.5 s per structure.
 
 ```
 cryptic_tabicl/
-├── config.py       paths, constants, the forbidden-feature list
-├── dataset.py      CryptoBench JSON → labels, chains, folds, hard negatives
-├── structures.py   mmCIF → per-residue records (gemmi) + Shrake–Rupley
-├── features.py     Tier A features + neighbourhood aggregates
-├── build_table.py  orchestration → parquet, with join instrumentation
-├── sampling.py     negative subsampling under TabICL's context budget
-├── model.py        zero-shot TabICL wrapper
-└── evaluate.py     per-protein metrics, comparable to the paper
-deploy/evaluate_modal.py   GPU evaluation on Modal
-tests/                     leakage guards, label logic, sampler invariants
+├── config.py              paths, constants, the forbidden-feature list
+├── dataset.py             CryptoBench JSON → labels, chains, folds, hard negatives
+├── structures.py          mmCIF → per-residue records (gemmi) + Shrake–Rupley
+├── features.py            Tier A features + neighbourhood aggregates
+├── anm.py                 ANM normal modes + conformation sampling
+├── fpocket.py             fpocket subprocess + CryptoSite's residue pocket score
+├── ensemble_features.py   Tier C ensemble pocket statistics
+├── conservation.py        PDBe Graph API conservation, joined on label_seq_id
+├── esm_embed.py           chain sequences + chunk bookkeeping for ESM-2
+├── build_table.py         orchestration → parquet, with join instrumentation
+├── sampling.py            negative subsampling under TabICL's context budget
+├── model.py               zero-shot TabICL wrapper
+└── evaluate.py            per-protein metrics, comparable to the paper
+
+deploy/
+├── evaluate_modal.py         GPU evaluation on Modal
+├── ensemble_modal.py         ~28k fpocket runs, fanned out
+├── esm_modal.py              ESM-2 embeddings + train-only PCA
+├── context_bootstrap.py      context-seed variance for TabICL
+└── context_ensemble_modal.py multi-context averaging
+
+scripts/
+├── fetch_cryptobench.py   annotations
+├── fetch_conservation.py  PDBe conservation, cached
+├── merge_{ensemble,conservation,esm}.py   staged joins onto the residue table
+├── baseline.py            sklearn controls on the same table
+├── compare_variants.py    every run in one table
+├── bootstrap_test.py      test-set CIs
+├── f1_by_subset.py        CB-full / CB-P2RANK-apo, with the published F1 convention
+└── cryptosite_testset.py  the 14-pair CryptoSite external test set
+
+figures/
+├── make_benchmark_figure.py   the published-benchmark bars  → benchmark_comparison.{png,pdf}
+├── make_model_ladder_figure.py  every model configuration    → model_ladder.{png,pdf}
+├── make_slide_figures.py      the nine slide panels          → slides/*.png
+├── make_deck.py               assembles them                → ../Cryptic_site_prediction_pipeline.pptx
+└── benchmark_comparison.html  interactive version; carries its OWN copy of the
+                               benchmark values and of the model ladder
+
+tests/                     leakage guards, label logic, sampler invariants,
+                           fpocket parsing, conservation join, ESM index bookkeeping
 ```
 
 ## Usage
@@ -203,12 +309,42 @@ python scripts/fetch_cryptobench.py
 # 2. build the residue table (~35 min, downloads ~1,100 mmCIFs)
 python -m cryptic_tabicl.build_table --out build/residues.parquet
 
-# 3. evaluate on a Modal GPU
-modal run --detach deploy/evaluate_modal.py --smoke   # pilot
-modal run --detach deploy/evaluate_modal.py           # full
+# 3. Tier C: ensemble pocket features (~28k fpocket runs on Modal)
+modal run --detach deploy/ensemble_modal.py
+python scripts/merge_ensemble.py                      # → residues_ens.parquet   (48)
 
-pytest tests/ -q
+# 4. conservation (~2,300 PDBe calls, local, cached)
+python scripts/fetch_conservation.py
+python scripts/merge_conservation.py                  # → residues_cons.parquet  (54)
+
+# 5. ESM-2 embeddings + train-only PCA
+modal run --detach deploy/esm_modal.py
+python scripts/merge_esm.py --n-components 64         # → residues_esm64.parquet (118)
+
+# 6. evaluate on a Modal GPU
+modal run --detach deploy/evaluate_modal.py --smoke                  # pilot
+modal run --detach deploy/evaluate_modal.py --variant esm64          # full
+
+# 7. report
+python scripts/compare_variants.py
+python scripts/bootstrap_test.py
+python scripts/f1_by_subset.py
+
+# 8. figures and deck — rebuild these whenever a number moves
+python scripts/model_ladder.py            # build/model_ladder.json, the ladder's data
+python figures/make_benchmark_figure.py
+python figures/make_model_ladder_figure.py
+python figures/make_slide_figures.py
+python figures/make_deck.py
+
+pytest tests/ -q      # 85 tests
 ```
+
+`figures/benchmark_comparison.html` is the one artifact with no build step: it is
+hand-maintained and holds its own copies of the benchmark table and the model ladder,
+so it has to be edited alongside the scripts. Its ladder block is regenerated from
+`build/model_ladder.json` and both blocks are checked back against the artifacts — the
+values in it are not transcribed by eye.
 
 Data is staged at `~/cryptobench_stage/` on local disk rather than under OneDrive,
 which would otherwise try to sync ~200 MB of structures.
@@ -248,7 +384,8 @@ hard negatives worth over-weighting. Isolating each choice at fixed context size
 
 Only ~17k residues in the entire dataset line a non-cryptic pocket, so a 40% quota
 over ~33k negative slots over-represents that stratum by roughly an order of
-magnitude. The per-protein cap was harmless. The quota cost **0.087 AUPRC**.
+magnitude. The per-protein cap was harmless. The quota cost **0.087 AUPRC** for
+logistic regression and 0.113 for TabICL.
 
 With it removed, a 50k context scores AUPRC 0.422 against full-data 0.417 — **there is
 no context-size ceiling at this dataset size at all.** Every "TabICL is handicapped by
@@ -268,12 +405,11 @@ TabICL is *in-context*: the labelled table is pushed through the network on ever
 forward pass, so its size is an inference-time memory cost, not a one-off training
 cost. 304k training residues will not fit, and v2 is pretrained for contexts up to
 roughly 60k rows. So `sampling.py` keeps **every positive** (they are the entire
-signal) and subsamples negatives under a 50k budget, reserving a share for residues
-lining already-open pockets — the hard negatives that separate "found a pocket" from
-"found a *cryptic* pocket". A per-protein cap keeps context composition from tracking
-protein size.
+signal) and subsamples negatives under a 50k budget, in proportion to how they
+actually occur. A per-protein cap keeps context composition from tracking protein
+size.
 
-With ~12k positives, the 50k budget binds before the nominal 1:8 ratio, giving ~1:3.
+With ~16k positives, the 50k budget binds before the nominal 1:8 ratio, giving ~1:2.
 
 ## Tier C: ensemble pocket scores
 
@@ -347,25 +483,44 @@ The remaining gap to CryptoSite's ensemble signal is most likely sampling: 24 AN
 conformations against 100,000 MD snapshots, and harmonic collective modes that cannot
 produce the side-chain and loop rearrangements many cryptic sites require.
 
-On TabICL the end-to-end effect is the same small, consistent shift:
+## Insertion codes are part of a residue's identity
 
-| | Tier A | + ensemble | Δ |
-|---|---|---|---|
-| AUC | 0.830 | 0.839 | +0.009 |
-| AUPRC | 0.324 | 0.323 | −0.001 |
-| MCC | 0.277 | 0.286 | +0.009 |
-| AUC, bulk surface | 0.820 | 0.831 | +0.010 |
-| AUC, lines an open pocket | 0.677 | 0.680 | +0.003 |
+Author residue numbering is not dense. Proteases and immunoglobulins insert residues
+without renumbering the chain, so 3bv9 chain B holds **ten** residues at position 60 —
+60, 60A, 60B … 60I — and six at 149. CryptoBench keys them the way the PDB spells them:
+`B_60`, `B_60A`. This project keyed on `(chain, seq_id)` alone, collapsing all ten onto
+`B_60`, and that failed in both directions at once:
 
-The last row is the disappointing one. The hard stratum — telling a cryptic site from
-a pocket that is already open — is where ensemble features were supposed to help most,
-and it barely moved. Whatever distinguishes those two cases, 24 harmonic conformations
-do not capture it.
+- an annotated `B_60A` matched no observed key, so a true positive was scored negative;
+- an annotated `B_149` matched all six residues at 149, so five were handed a positive
+  label they never earned — the more common of the two.
+
+19 residues were wrongly positive and 1 wrongly negative, plus 9 and 3 for the
+`in_noncryptic_pocket` feature: 32 residues across six structures, and `3bv9B`
+quarantined outright at match rate 0.793 because 6 of its 29 annotated keys carried a
+code. Only 9 of 20,387 annotated cryptic keys carry one at all, which is why exactly one
+structure crossed the quarantine line.
+
+**Every affected residue was in the training split — 0 of 76,636 test rows changed.**
+That is luck, not design. The corrections reach the model only through the in-context
+table, where they amount to 11 changed rows out of 50,000, so the headline moved by less
+than the context-draw noise (AUC 0.882 → 0.882, AUPRC 0.480 → 0.476) while the
+quarantine went 1 → 0.
+
+The key is now `{chain}_{seq_id}{icode}`, and all three feature merges join on the same
+four-part key under `validate="1:1"` — previously two of them joined on three parts and
+called `drop_duplicates`, handing residues 60A–60I the features of residue 60. Two
+related defects were fixed alongside: the ANM ensemble seed was `hash(apo_id)`, which is
+salted per interpreter and so drew different conformations every run, and
+`evaluate_modal` had no variant name that resolved to the 54-feature table. Full
+accounting in RESULTS.md § 7.
 
 ## Deferred
 
-- **Conservation** (CryptoSite's #2 feature) — needs MSAs
-- **ESM-2 embeddings** — what pLM-NN uses; PCA to 32–64 dims to stay near TabICL's
-  feature sweet spot
 - **Fine-tuning** — `tabicl[finetune]` exists, but it forfeits the zero-training
   property; if run, report beside the zero-shot number, never instead of it
+- **CryptoSite external test set** — `scripts/cryptosite_testset.py` builds the 14-pair
+  held-out set (none of its apo structures appears in CryptoBench); scoring has not
+  been run
+- **Side-chain and loop motion** — the one thing that plausibly moves the hard stratum,
+  and the one thing harmonic ANM modes cannot produce

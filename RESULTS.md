@@ -10,6 +10,14 @@ frozen before the test set is touched.
 
 Reproduce with `python scripts/compare_variants.py`.
 
+> **Re-measured after the insertion-code fix (§ 7).** Residue keys previously dropped
+> the PDB insertion code, so `B_60A` and `B_60` collapsed onto one key. Every number in
+> this document was regenerated from a rebuilt table afterwards. The test split was
+> unaffected — 0 of 76,636 test rows changed label — so the corrections reach the
+> results only through the in-context training table, and the headline moved by less
+> than the context-draw noise (AUC 0.882 → 0.882, AUPRC 0.480 → 0.476). The one
+> conclusion that did not survive is in § 5.
+
 ---
 
 ## 1. Headline
@@ -18,13 +26,13 @@ Reproduce with `python scripts/compare_variants.py`.
 
 | metric | 118 feat (+ESM) | 54 feat (no pLM) |
 |---|---|---|
-| AUC | **0.882** | 0.868 |
-| AUPRC | **0.480** | 0.453 |
-| TPR | 0.595 | 0.567 |
-| FPR | 0.062 | 0.063 |
-| MCC | 0.414 | 0.391 |
-| F1 (weighted — the published convention) | 0.922 | 0.919 |
-| F1 (positive class) | 0.418 | 0.399 |
+| AUC | **0.882** | 0.867 |
+| AUPRC | **0.476** | 0.450 |
+| TPR | 0.591 | 0.565 |
+| FPR | 0.062 | 0.064 |
+| MCC | 0.410 | 0.389 |
+| F1 (weighted — the published convention) | 0.921 | 0.918 |
+| F1 (positive class) | 0.415 | 0.397 |
 
 No training of any kind: the labelled context is a single forward pass, and the ESM
 features are frozen embeddings, not a fine-tuned network. No holo structure at
@@ -45,11 +53,11 @@ all.
 
 | Method | Dataset | AUC | AUPRC | TPR | FPR | MCC | F1 (weighted) |
 |---|---|---|---|---|---|---|---|
-| **TabICLv2 +ESM (this work)** | **CB-full** | **0.882** | **0.480** | **0.595** | 0.062 | 0.414 | 0.922 |
-| TabICLv2, no pLM (this work) | CB-full | 0.868 | 0.453 | 0.567 | 0.063 | 0.391 | 0.919 |
+| **TabICLv2 +ESM (this work)** | **CB-full** | **0.882** | **0.476** | **0.591** | 0.062 | 0.410 | 0.921 |
+| TabICLv2, no pLM (this work) | CB-full | 0.867 | 0.450 | 0.565 | 0.064 | 0.389 | 0.918 |
 | pLM-NN (benchmark) | CB-full | 0.86 | 0.36 | 0.48 | 0.05 | 0.39 | 0.92 |
-| **TabICLv2 +ESM (this work)** | **CB-P2RANK-apo** | **0.884** | **0.504** | **0.606** | 0.061 | 0.429 | 0.923 |
-| TabICLv2, no pLM (this work) | CB-P2RANK-apo | 0.867 | 0.473 | 0.570 | 0.061 | 0.404 | 0.919 |
+| **TabICLv2 +ESM (this work)** | **CB-P2RANK-apo** | **0.885** | **0.501** | **0.602** | 0.062 | 0.425 | 0.922 |
+| TabICLv2, no pLM (this work) | CB-P2RANK-apo | 0.868 | 0.471 | 0.571 | 0.063 | 0.405 | 0.919 |
 | pLM-NN | CB-P2RANK-apo | 0.88 | 0.42 | 0.51 | 0.04 | 0.43 | 0.93 |
 | P2Rank | CB-P2RANK-apo | 0.81 | 0.21 | 0.62 | 0.14 | 0.27 | 0.81 |
 | pLM-NN | CB-PM | 0.88 | 0.43 | 0.52 | 0.04 | 0.44 | 0.93 |
@@ -62,18 +70,18 @@ rows are directly comparable. See § *Metric conventions* below for why the posi
 F1 must not be placed in this column. Published values are from
 `external/CryptoBench/README.md`; ours regenerate with `python scripts/f1_by_subset.py`.
 
-On CB-full the ESM variant exceeds pLM-NN on AUC (+0.022), AUPRC (+0.120), TPR (+0.115)
-and MCC (+0.024), at a slightly looser FPR (0.062 vs 0.05). The FPR gap is threshold
+On CB-full the ESM variant exceeds pLM-NN on AUC (+0.022), AUPRC (+0.116), TPR (+0.111)
+and MCC (+0.020), at a slightly looser FPR (0.062 vs 0.05). The FPR gap is threshold
 transfer — the threshold was frozen from CV targeting 0.05 and landed at 0.062 on test.
 **Read these margins against § 2.1**: the AUPRC and TPR gaps survive test-set
 resampling, the MCC gap does not, and the FPR gap runs against us significantly.
 
 CB-P2RANK-apo (the 184 single-chain test structures) is reconstructible from the shipped
-dataset, so we report it too. Without a language model we trailed pLM-NN on AUC (−0.013)
-and MCC (−0.026); with ESM we lead on AUC (+0.004), AUPRC (+0.084) and TPR (+0.096) and
-are level on MCC (0.429 vs 0.43). Note this is the subset where our evaluation unit and
+dataset, so we report it too. Without a language model we trailed pLM-NN on AUC (−0.012)
+and MCC (−0.025); with ESM we lead on AUC (+0.005), AUPRC (+0.081) and TPR (+0.092) and
+are level on MCC (0.425 vs 0.43). Note this is the subset where our evaluation unit and
 pLM-NN's are identical by construction, so it is the cleanest of the two rows. **The
-+0.004 AUC margin here does not survive resampling (§ 2.1)** — only the AUPRC and TPR
++0.005 AUC margin here does not survive resampling (§ 2.1)** — only the AUPRC and TPR
 margins do.
 
 **F1 separates almost nothing here, and that is the finding.** Every pLM-based row —
@@ -81,9 +89,9 @@ ours and pLM-NN's, on both subsets — sits at 0.92–0.93; the column's only re
 discrimination is against the structure-only tools (P2Rank 0.81, PocketMiner 0.78). At
 5.28 % prevalence a weighted F1 is governed by the 95 % of residues that are trivially
 negative, so it largely measures whether a method avoided flooding the negative class.
-Two consequences for reporting: our 0.922 on CB-full is **not** a win over pLM-NN's 0.92
+Two consequences for reporting: our 0.921 on CB-full is **not** a win over pLM-NN's 0.92
 (their value is published to 2 dp, at which precision the two are equal), and on
-CB-P2RANK-apo pLM-NN is genuinely ahead, 0.93 vs 0.923. Quote AUPRC, not F1.
+CB-P2RANK-apo pLM-NN is genuinely ahead, 0.93 vs 0.922. Quote AUPRC, not F1.
 
 **CB-PM is not reconstructible** from the shipped files — it is defined by which 60
 structures PocketMiner failed on, which is a property of that tool's run, not of the
@@ -100,23 +108,23 @@ percentile interval, `python scripts/bootstrap_test.py`.
 
 | metric | CB-full (n=231) | 95 % CI | pLM-NN | CB-P2RANK-apo (n=184) | 95 % CI | pLM-NN |
 |---|---|---|---|---|---|---|
-| AUC | 0.882 | [0.862, 0.900] | 0.86 ✔ | 0.884 | [0.861, 0.906] | 0.88 ✗ |
-| AUPRC | 0.480 | [0.443, 0.518] | 0.36 ✔ | 0.504 | [0.461, 0.546] | 0.42 ✔ |
-| TPR | 0.595 | [0.550, 0.639] | 0.48 ✔ | 0.606 | [0.556, 0.654] | 0.51 ✔ |
-| FPR | 0.062 | [0.056, 0.067] | 0.05 ✗† | 0.061 | [0.055, 0.067] | 0.04 ✗† |
-| MCC | 0.414 | [0.381, 0.447] | 0.39 ✗ | 0.429 | [0.391, 0.465] | 0.43 ✗ |
-| F1 (weighted) | 0.922 | [0.916, 0.928] | 0.92 ✗ | 0.923 | [0.915, 0.929] | 0.93 ✗† |
+| AUC | 0.882 | [0.863, 0.901] | 0.86 ✔ | 0.885 | [0.862, 0.906] | 0.88 ✗ |
+| AUPRC | 0.476 | [0.439, 0.514] | 0.36 ✔ | 0.501 | [0.459, 0.543] | 0.42 ✔ |
+| TPR | 0.591 | [0.546, 0.635] | 0.48 ✔ | 0.602 | [0.552, 0.651] | 0.51 ✔ |
+| FPR | 0.062 | [0.057, 0.068] | 0.05 ✗† | 0.062 | [0.056, 0.068] | 0.04 ✗† |
+| MCC | 0.410 | [0.377, 0.443] | 0.39 ✗ | 0.425 | [0.386, 0.460] | 0.43 ✗ |
+| F1 (weighted) | 0.921 | [0.915, 0.927] | 0.92 ✗ | 0.922 | [0.914, 0.929] | 0.93 ✗† |
 
 **TabICLv2, no pLM (54 feat)**
 
 | metric | CB-full (n=231) | 95 % CI | pLM-NN | CB-P2RANK-apo (n=184) | 95 % CI | pLM-NN |
 |---|---|---|---|---|---|---|
-| AUC | 0.868 | [0.848, 0.886] | 0.86 ✗ | 0.867 | [0.844, 0.890] | 0.88 ✗ |
-| AUPRC | 0.453 | [0.417, 0.490] | 0.36 ✔ | 0.473 | [0.432, 0.514] | 0.42 ✔ |
-| TPR | 0.567 | [0.522, 0.610] | 0.48 ✔ | 0.570 | [0.519, 0.620] | 0.51 ✔ |
-| FPR | 0.063 | [0.058, 0.069] | 0.05 ✗† | 0.061 | [0.055, 0.068] | 0.04 ✗† |
-| MCC | 0.391 | [0.358, 0.424] | 0.39 ✗ | 0.404 | [0.366, 0.442] | 0.43 ✗ |
-| F1 (weighted) | 0.919 | [0.911, 0.925] | 0.92 ✗ | 0.919 | [0.911, 0.927] | 0.93 ✗† |
+| AUC | 0.867 | [0.847, 0.886] | 0.86 ✗ | 0.868 | [0.844, 0.890] | 0.88 ✗ |
+| AUPRC | 0.450 | [0.413, 0.487] | 0.36 ✔ | 0.471 | [0.431, 0.513] | 0.42 ✔ |
+| TPR | 0.565 | [0.520, 0.609] | 0.48 ✔ | 0.571 | [0.521, 0.620] | 0.51 ✔ |
+| FPR | 0.064 | [0.059, 0.070] | 0.05 ✗† | 0.063 | [0.056, 0.070] | 0.04 ✗† |
+| MCC | 0.389 | [0.356, 0.422] | 0.39 ✗ | 0.405 | [0.367, 0.442] | 0.43 ✗ |
+| F1 (weighted) | 0.918 | [0.911, 0.924] | 0.92 ✗ | 0.919 | [0.910, 0.926] | 0.93 ✗† |
 
 ✔ = pLM-NN's published value falls **outside** our interval, on the losing side — the
 gap survives test-set resampling.  ✗ = it falls **inside**, so the difference is not
@@ -127,11 +135,11 @@ pLM-NN (lower FPR; higher F1 on CB-P2RANK-apo), i.e. a gap against us.
 
 - **AUPRC and TPR are the real result.** pLM-NN sits below our interval on both metrics
   and both subsets. These are the claims to lead with.
-- **The AUC lead does not survive.** On CB-P2RANK-apo the +0.004 margin is inside a
+- **The AUC lead does not survive.** On CB-P2RANK-apo the +0.005 margin is inside a
   ±0.022 interval; on CB-full only the 118-feature variant clears it, and the
-  54-feature variant does not. Do not report "+0.004 AUC" as a lead.
+  54-feature variant does not. Do not report "+0.005 AUC" as a lead.
 - **MCC is not resolved anywhere** — pLM-NN's value is inside every interval. The
-  earlier reading "level on MCC" is right; "+0.024 on CB-full" is not.
+  earlier reading "level on MCC" is right; "+0.020 on CB-full" is not.
 - **Two gaps run against us and are significant**: our FPR is genuinely higher (the
   threshold-transfer effect, 0.062 vs 0.05), and on CB-P2RANK-apo pLM-NN's weighted F1
   of 0.93 sits above our interval.
@@ -142,13 +150,14 @@ pLM-NN (lower FPR; higher F1 on CB-P2RANK-apo), i.e. a gap against us.
    estimates only — without their per-protein scores a paired interval on the gap is
    not computable, so containment is the strongest available check.
 2. It captures test-set sampling only, not the 50k context draw. That second source is
-   far smaller: over 20 context seeds (`python scripts/context_seed_variance.py`, 54
-   features, LogisticRegression as a CPU-cheap stand-in) the draw moves AUC by sd 0.0004
-   and AUPRC by sd 0.0012 — roughly 30× tighter than the intervals above, so it is a
-   correction rather than a competing source. It has **not** been measured for TabICL
-   itself, where the context *is* the model; the only indirect evidence is § 4.2. Note
-   also that seed 0, the one every headline run uses, was the highest-AUPRC draw of
-   those 20.
+   far smaller, and it has now been measured for TabICL directly (§ 4.6, 12 context
+   seeds on the 118-feature run): sd 0.0006 AUC and 0.0030 AUPRC, roughly 20–30×
+   tighter than the intervals above, so it is a correction rather than a competing
+   source. Seed 0, the one every headline run uses, is mid-pack there (AUPRC 0.4800
+   against a mean of 0.4788 and a max of 0.4846). A cheaper stand-in agrees: over 20
+   seeds with logistic regression on 54 features
+   (`python scripts/context_seed_variance.py`) the draw moves AUC by sd 0.0004 and
+   AUPRC by sd 0.0012 — though there seed 0 *was* the highest-AUPRC draw of the 20.
 
 
 ### Metric conventions, verified against the paper and `Protein.py`
@@ -164,8 +173,8 @@ pLM-NN (lower FPR; higher F1 on CB-P2RANK-apo), i.e. a gap against us.
 The paper states F1 was "computed using a weighted average", which at ~5% prevalence is
 dominated by the negative class — that is why their F1 (0.92) tracks their ACC (0.93)
 rather than their TPR (0.48). `evaluate.py` now emits **both**: our `F1_weighted` is
-**0.919** for the 54-feature variant and **0.922** with ESM, i.e. indistinguishable from
-their 0.92, and our positive-class `F1` is **0.399** / **0.418**, which is the number
+**0.918** for the 54-feature variant and **0.921** with ESM, i.e. indistinguishable from
+their 0.92, and our positive-class `F1` is **0.397** / **0.415**, which is the number
 that actually carries information. Only `F1_weighted` may be placed next to the
 published column.
 
@@ -173,40 +182,79 @@ The threshold is not a benchmark constant: pLM-NN used 0.95, PocketMiner 0.7 (it
 authors' recommendation), and P2Rank emits binary calls with no threshold at all. Each
 method sets its own, so selecting ours on training folds is the same procedure, not a
 deviation. Applying their 0.95 to TabICL's scores would measure calibration rather than
-ranking — only 0.98% of test residues reach 0.95, collapsing TPR to 0.104.
+ranking — only 1.15% of test residues reach 0.95, collapsing TPR to 0.121.
 
 ---
 
 ## 3. All model variants
 
+Every row below is on the **corrected table and the fixed sampler**, so the comparison
+isolates model and feature set. (The pre-fix document mixed two sampler eras in this
+table; that is no longer the case, and the old-sampler rows are kept separately at the
+bottom for the record.)
+
 | Model | feat | negatives | AUC | AUPRC | TPR | FPR | MCC |
 |---|---|---|---|---|---|---|---|
-| **TabICLv2 zero-shot + ESM-64** | 118 | fixed sampler, 50k | **0.882** | **0.480** | 0.595 | 0.062 | 0.414 |
-| TabICLv2 zero-shot + ESM-32 | 86 | fixed sampler, 50k | 0.879 | 0.480 | 0.592 | 0.063 | 0.405 |
-| LogisticRegression + ESM-64 | 118 | full 304k | 0.875 | 0.471 | — | — | — |
-| TabICLv2 zero-shot + ESM-16 | 70 | fixed sampler, 50k | 0.874 | 0.469 | 0.574 | 0.063 | 0.397 |
-| LogisticRegression + ESM-32 | 86 | full 304k | 0.872 | 0.468 | — | — | — |
-| TabICLv2 zero-shot | 54 | fixed sampler, 50k | 0.868 | 0.453 | 0.567 | 0.063 | 0.391 |
-| LogisticRegression + ESM-16 | 70 | full 304k | 0.863 | 0.452 | — | — | — |
-| RandomForest + ESM-64 | 118 | full 304k | 0.862 | 0.449 | — | — | — |
-| LogisticRegression | 54 | fixed sampler, 50k | 0.855 | 0.441 | 0.457 | 0.041 | — |
-| RandomForest | 54 | fixed sampler, 50k | 0.856 | 0.435 | 0.685 | 0.141 | — |
-| LogisticRegression | 54 | full 304k | 0.853 | 0.437 | 0.474 | 0.051 | — |
-| RandomForest | 54 | full 304k | 0.853 | 0.432 | 0.245 | 0.013 | — |
-| TabICLv2 zero-shot | 48 | fixed sampler, 50k | 0.862 | 0.436 | 0.549 | 0.066 | 0.371 |
-| LogisticRegression | 48 | fixed sampler, 50k | 0.848 | 0.422 | — | — | — |
-| LogisticRegression | 48 | full 304k | 0.847 | 0.417 | 0.451 | 0.050 | 0.341 |
-| RandomForest | 34 | full 304k | 0.840 | 0.418 | 0.258 | 0.015 | 0.258 |
-| RandomForest | 48 | full 304k | 0.839 | 0.396 | 0.229 | 0.013 | 0.244 |
-| LogisticRegression | 34 | full 304k | 0.834 | 0.413 | 0.455 | 0.050 | 0.346 |
-| TabICLv2 zero-shot ×5 contexts | 48 | old sampler, 50k | 0.840 | 0.327 | 0.472 | 0.081 | 0.291 |
-| TabICLv2 zero-shot | 48 | old sampler, 50k | 0.839 | 0.323 | 0.443 | 0.074 | 0.286 |
-| TabICLv2 zero-shot | 34 | old sampler, 50k | 0.830 | 0.324 | 0.441 | 0.077 | 0.277 |
-| LogisticRegression | 48 | old sampler, 50k | 0.827 | 0.333 | 0.198 | 0.022 | 0.194 |
-| RandomForest | 48 | old sampler, 50k | 0.822 | 0.299 | 0.624 | 0.156 | 0.283 |
-| RandomForest | 34 | old sampler, 50k | 0.820 | 0.312 | 0.582 | 0.140 | 0.275 |
-| LogisticRegression | 34 | old sampler, 50k | 0.813 | 0.324 | 0.207 | 0.023 | 0.205 |
+| **TabICLv2 zero-shot + ESM-64** | 118 | 50k context | **0.882** | **0.476** | 0.591 | 0.062 | 0.410 |
+| TabICLv2 zero-shot + ESM-32 | 86 | 50k context | 0.880 | 0.472 | 0.594 | 0.064 | 0.408 |
+| LogisticRegression + ESM-64 | 118 | 50k context | 0.875 | 0.472 | 0.503 | 0.044 | 0.393 |
+| LogisticRegression + ESM-64 | 118 | full 305k | 0.875 | 0.470 | 0.526 | 0.054 | 0.406 |
+| TabICLv2 zero-shot + ESM-16 | 70 | 50k context | 0.874 | 0.464 | 0.576 | 0.064 | 0.399 |
+| LogisticRegression + ESM-32 | 86 | 50k context | 0.872 | 0.469 | 0.497 | 0.044 | 0.388 |
+| LogisticRegression + ESM-32 | 86 | full 305k | 0.872 | 0.468 | 0.519 | 0.052 | 0.400 |
+| **TabICLv2 zero-shot** | 54 | 50k context | **0.867** | **0.450** | 0.565 | 0.064 | 0.389 |
+| LogisticRegression + ESM-16 | 70 | 50k context | 0.864 | 0.455 | 0.471 | 0.042 | 0.376 |
+| LogisticRegression + ESM-16 | 70 | full 305k | 0.863 | 0.452 | 0.488 | 0.049 | 0.385 |
+| RandomForest + ESM-64 | 118 | full 305k | 0.863 | 0.448 | 0.193 | 0.009 | 0.232 |
+| TabICLv2 zero-shot | 48 | 50k context | 0.862 | 0.430 | 0.543 | 0.065 | 0.366 |
+| RandomForest + ESM-64 | 118 | 50k context | 0.861 | 0.446 | 0.732 | 0.159 | 0.354 |
+| RandomForest + ESM-32 | 86 | full 305k | 0.860 | 0.451 | 0.221 | 0.011 | 0.251 |
+| RandomForest + ESM-16 | 70 | full 305k | 0.857 | 0.442 | 0.234 | 0.011 | 0.266 |
+| **TabICLv2 zero-shot** | 34 | 50k context | **0.856** | **0.433** | 0.543 | 0.063 | 0.369 |
+| RandomForest | 54 | 50k context | 0.855 | 0.432 | 0.682 | 0.137 | 0.350 |
+| LogisticRegression | 54 | 50k context | 0.854 | 0.439 | 0.455 | 0.042 | 0.361 |
+| LogisticRegression | 54 | full 305k | 0.854 | 0.437 | 0.477 | 0.051 | 0.373 |
+| RandomForest | 54 | full 305k | 0.853 | 0.434 | 0.257 | 0.014 | 0.278 |
+| LogisticRegression | 48 | 50k context | 0.847 | 0.423 | 0.443 | 0.043 | 0.339 |
+| LogisticRegression | 48 | full 305k | 0.847 | 0.418 | 0.451 | 0.050 | 0.342 |
+| RandomForest | 48 | 50k context | 0.846 | 0.401 | 0.662 | 0.139 | 0.326 |
+| RandomForest | 34 | 50k context | 0.841 | 0.417 | 0.638 | 0.126 | 0.329 |
+| RandomForest | 48 | full 305k | 0.839 | 0.398 | 0.249 | 0.014 | 0.257 |
+| RandomForest | 34 | full 305k | 0.838 | 0.415 | 0.257 | 0.015 | 0.257 |
+| LogisticRegression | 34 | 50k context | 0.835 | 0.414 | 0.443 | 0.044 | 0.335 |
+| LogisticRegression | 34 | full 305k | 0.834 | 0.413 | 0.456 | 0.050 | 0.347 |
 | RSA alone (floor) | 1 | — | 0.499 | 0.089 | 0.876 | 0.832 | 0.034 |
+
+Three readings hold up:
+
+1. **TabICL leads at every feature count**, including against models that see all 305k
+   training rows — by ~0.005–0.010 AUC and ~0.004–0.020 AUPRC. Real, consistent, and
+   small next to what the features do.
+2. **The features carry most of the result.** Holding model and sampler fixed, TabICL
+   goes 34 → 48 → 54 → 118 features for AUPRC 0.433 → 0.430 → 0.450 → 0.476. Swapping
+   the model at fixed features moves it by ~0.02.
+3. **The task is multivariate.** RSA alone is 0.499 — chance.
+
+Note the 48-feature row is the one place where a feature addition did *not* help TabICL
+(0.433 → 0.430 AUPRC, though AUC rose 0.856 → 0.862). The ensemble features' small
+contribution is discussed in § 4.3; at this sample size a −0.003 AUPRC step is inside
+the context-draw band.
+
+### Superseded: old-sampler runs
+
+Kept because § 4.1 quantifies the sampler bug and these are its evidence. Do not compare
+them against the table above — the negative sampler differs, which is a larger effect
+than anything else in this document.
+
+| Model | feat | AUC | AUPRC |
+|---|---|---|---|
+| TabICLv2 zero-shot ×5 contexts | 48 | 0.840 | 0.327 |
+| TabICLv2 zero-shot | 48 | 0.839 | 0.323 |
+| TabICLv2 zero-shot | 34 | 0.830 | 0.324 |
+| LogisticRegression | 48 | 0.827 | 0.333 |
+| RandomForest | 48 | 0.822 | 0.299 |
+| RandomForest | 34 | 0.820 | 0.312 |
+| LogisticRegression | 34 | 0.813 | 0.324 |
 
 The RSA floor at 0.499 confirms no single descriptor solves this — the signal is
 genuinely multivariate.
@@ -215,15 +263,16 @@ genuinely multivariate.
 
 Inner CV over CryptoBench's train folds, used only to freeze the threshold:
 
-| fold | 48 feat AUC / AUPRC | 54 feat AUC / AUPRC |
+| fold | 54 feat AUC / AUPRC | 118 feat AUC / AUPRC |
 |---|---|---|
-| train-fold-0 | 0.830 / 0.391 | 0.835 / 0.402 |
-| train-fold-1 | 0.859 / 0.463 | 0.862 / 0.474 |
-| train-fold-2 | 0.838 / 0.421 | 0.845 / 0.440 |
-| train-fold-3 | 0.834 / 0.424 | 0.838 / 0.433 |
+| train-fold-0 | 0.835 / 0.404 | 0.845 / 0.431 |
+| train-fold-1 | 0.863 / 0.479 | 0.878 / 0.506 |
+| train-fold-2 | 0.844 / 0.441 | 0.854 / 0.460 |
+| train-fold-3 | 0.838 / 0.433 | 0.850 / 0.456 |
 
-Conservation helps on every fold, by +0.009 to +0.019 AUPRC. Spread of ~0.03 AUC
-across folds — no single fold carries the result.
+Frozen thresholds: 0.5527 (54 feat) and 0.5677 (118 feat). ESM helps on every fold, by
++0.023 to +0.027 AUPRC. Spread of ~0.03 AUC across folds — no single fold carries the
+result.
 
 ---
 
@@ -235,13 +284,21 @@ Ranked by effect on AUPRC, which is the honest summary at 5% prevalence.
 |---|---|---|
 | Fixing the negative sampler | **+0.113** | one line |
 | Fixing PDB column alignment | +0.144 *(on ensemble features alone)* | one line |
+| Adding 64 ESM-2 principal components | +0.026 | 0.06 A10G-hours (~$0.07) |
 | Adding 6 conservation features | +0.017 | ~2,300 API calls |
 | Adding 14 ensemble pocket features | +0.014 | ~28,000 fpocket runs |
 | Averaging over 5 contexts | +0.004 | 5× GPU inference |
+| Fixing the insertion-code key (§ 7) | −0.004 *(noise; 0 test rows changed)* | three lines |
 
-The two largest effects were both bugs in code I wrote. The three deliberate capability
-additions were the three smallest. Conservation was the best value per unit of effort:
-comparable gain to the ensemble features for roughly 1% of the compute.
+Three of the five largest entries are bugs in code I wrote, and the deliberate
+capability additions are the smaller ones. The insertion-code fix is in the table for
+completeness rather than for its effect: it corrected 32 mislabelled residues and
+restored a quarantined protein, all of them in the training split, and the resulting
+movement is smaller than the context-draw noise.
+
+By measured compute ESM-2 was the best value of the three additions — the largest gain
+for a few minutes of A10G time. The real cost there was baking an 11 GB checkpoint into
+the image, not running it.
 
 ### 4.1 The negative sampler (+0.113 AUPRC)
 
@@ -306,6 +363,12 @@ Ablation, logistic regression on full train, pooled test metrics:
 They are **not redundant** — maximum absolute correlation with any Tier A feature is
 0.21 — there is simply little incremental information. Three of the combined model's
 fourteen largest weights are ensemble features.
+
+Measured end-to-end on TabICL against the corrected table, the effect is smaller still
+and not uniformly positive: 34 → 48 features gives AUC 0.856 → 0.862 (+0.006) but AUPRC
+0.433 → 0.430 (−0.004), and on the hard stratum only +0.005. The ablation above is
+logistic regression on pooled metrics, which is a different and more favourable
+measurement; both are reported rather than only the flattering one.
 
 Why so much weaker than CryptoSite's result: its −log₁₀P ranking is **univariate**,
 measuring each descriptor alone against the null rather than its increment over the
@@ -398,6 +461,11 @@ magnitude, carries the signal.
 
 ### 4.6 Context-draw variance (12 seeds)
 
+Measured on the **pre-fix** table; not re-run after § 7 (it costs ~$6.60 of T4 time and
+the corrected headline sits inside the band below). § 5.1 reuses its stored per-residue
+scores to put an error bar on the per-stratum AUCs, which is a question about noise
+magnitude rather than about the corrected point estimate.
+
 | metric | mean | sd | min – max | seed 0 (reported) |
 |---|---|---|---|---|
 | AUC | 0.8822 | 0.0006 | 0.8814 – 0.8832 | 0.8819 |
@@ -413,43 +481,73 @@ magnitude, carries the signal.
 
 ## 5. Where the model is weak
 
-Test set stratified by whether a residue lines an already-open (non-cryptic) pocket:
+Test set stratified by whether a residue lines an already-open (non-cryptic) pocket,
+118-feature run:
 
 | stratum | residues | prevalence | AUC | AUPRC | TPR |
 |---|---|---|---|---|---|
-| bulk surface | 73,296 | 3.5% | 0.851 | 0.236 | 0.433 |
-| lines a non-cryptic pocket | 3,340 | 44.0% | **0.699** | 0.612 | 0.953 |
+| bulk surface | 73,296 | 3.5% | 0.879 | 0.257 | 0.482 |
+| lines a non-cryptic pocket | 3,340 | 44.0% | **0.714** | 0.635 | 0.942 |
 
-**This stratum resisted three interventions and then moved slightly on the fourth:**
+0.714 against 0.879 remains the limiting factor: telling a cryptic site from a pocket
+that is *already open* is the discrimination the task is actually about, and it is
+where essentially all of the remaining headroom sits.
 
-| run | hard-stratum AUC | bulk-surface AUC | gap |
+**How each addition moved it:**
+
+All rows on the corrected table and the fixed sampler, so this is a like-for-like
+series for the first time:
+
+| run | feat | hard stratum | bulk surface | gap |
+|---|---|---|---|---|
+| Tier A | 34 | 0.667 | 0.824 | 0.157 |
+| + ensemble pocket features | 48 | 0.672 | 0.838 | 0.166 |
+| + conservation | 54 | 0.690 | 0.852 | 0.163 |
+| + ESM-16 | 70 | 0.705 | 0.867 | 0.162 |
+| + ESM-32 | 86 | 0.710 | 0.876 | 0.166 |
+| **+ ESM-64** | **118** | **0.714** | **0.879** | **0.165** |
+
+### 5.1 A conclusion that did not survive re-measurement
+
+The previous version of this section read: *"ESM did not close the gap — it widened it.
+The bulk surface improved by +0.027 while the hard stratum improved by +0.015, so the
+spread went from 0.152 to 0.164. A protein language model makes the model better at the
+part it was already good at."*
+
+**That claim does not hold.** On the corrected table the two strata improve by almost
+the same amount — bulk +0.027 (0.852 → 0.879), hard +0.024 (0.690 → 0.714) — and the
+gap is flat across k at 0.162–0.166.
+
+The reason the earlier reading was unsafe is measurable. Recomputing per-stratum AUC
+for each of the 12 context seeds in § 4.6 (the scores are stored, so this costs
+nothing):
+
+| stratum | mean | sd | min – max |
 |---|---|---|---|
-| Tier A, old sampler | 0.677 | — | — |
-| + ensemble features, old sampler | 0.680 | — | — |
-| + ensemble features, fixed sampler | 0.681 | — | — |
-| + conservation, fixed sampler | 0.699 | 0.851 | 0.152 |
-| + ESM-16 | 0.707 | 0.866 | 0.159 |
-| + ESM-32 | 0.714 | 0.875 | 0.161 |
-| **+ ESM-64** | **0.714** | **0.878** | **0.164** |
+| bulk surface | 0.8783 | 0.0006 | 0.8777 – 0.8794 |
+| lines a non-cryptic pocket | 0.7132 | **0.0045** | 0.7073 – 0.7233 |
+| gap | 0.1650 | **0.0043** | 0.1558 – 0.1708 |
 
-Conservation produced the first real movement (+0.018). ESM added another +0.015 and
-then saturated between k=32 and k=64.
+The hard stratum holds 3,340 residues against the bulk stratum's 73,296, and its AUC is
+**seven times noisier** under a change of context draw — sd 0.0045 against 0.0006. The
+gap inherits that noise. So a +0.012 movement in the gap, read off two single draws, was
+never distinguishable from resampling; both the old 0.152 and the new 0.163 sit inside
+the seed band, and so does every value of k.
 
-**But ESM did not close the gap — it widened it.** The bulk surface improved by +0.027
-while the hard stratum improved by +0.015, so the spread went from 0.152 to 0.164. A
-protein language model makes the model better at the part it was already good at. That
-is evidence against the hope that crypticity is legible in sequence: if it were, ESM is
-exactly the feature that should have found it, and it preferentially did not.
+The general lesson is the same one § 4.3b records in the opposite direction: a
+difference measured on a small stratum needs its own error bar before it carries an
+interpretation. The stratum is 4.4% of the test set, and nothing about the headline
+AUC's tightness (sd 0.0006) transfers to it.
 
-0.714 against 0.878 remains the limiting factor: telling a cryptic site from a pocket
-that is *already open* is the discrimination the task is actually about.
-
-What has NOT helped here: 28,000 fpocket runs over conformational ensembles (+0.001),
-the sampler fix (+0.001), and context averaging (0.000). Harmonic collective motion
-cannot produce the side-chain rotamer flips and loop crossings that plausibly separate
-these cases, and no amount of resampling substitutes for that. ESM's failure to close
-the gap points the same way: what distinguishes these two classes appears to be a
-property of motion, not of sequence or of static shape.
+**What is still true, and is the finding:** the gap sits at 0.157–0.166 across every
+feature set tried, and nothing has closed it. Each addition lifts both strata together —
+34 → 118 features moves the hard stratum +0.047 and bulk surface +0.055 — so the
+descriptors are getting better at pocket-likeness in general rather than at crypticity
+in particular. Ensemble pocket features are the weakest of the three additions here
+(+0.005 hard), which is the same conclusion § 4.3 reaches from the headline metrics:
+harmonic collective motion cannot produce the side-chain rotamer flips and loop
+crossings that plausibly separate a cryptic site from an already-open one, and no
+amount of resampling substitutes for that.
 
 ---
 
@@ -457,16 +555,16 @@ property of motion, not of sequence or of static shape.
 
 | | |
 |---|---|
-| Rows | 380,930 residues |
-| Proteins | 1,135 apo structures (1 quarantined of 1,136) |
+| Rows | 381,189 residues |
+| Proteins | 1,136 apo structures (0 quarantined) |
 | Prevalence | 5.34% positive |
-| Features | 48, all computed from the **apo structure only** |
+| Features | 118 (54 without the pLM), all computed from the **apo structure only** |
 | Splits | CryptoBench's own sequence-identity folds, group = apo structure |
 | Label match rate | median 1.000, min 0.800 |
 | Ensemble feature coverage | 100% of residues and proteins |
-| Tests | 32 passing |
+| Tests | 85 passing |
 
-Three guards enforced by tests:
+Four guards enforced by tests:
 
 1. **No holo-derived feature reaches X.** A cryptic site is *defined* by the apo→holo
    change, so any holo-derived quantity reconstructs the label and is unavailable at
@@ -476,13 +574,93 @@ Three guards enforced by tests:
 3. **Labels are the union over all holo partners.** 5,493 pairings for 1,136 apo
    structures (~5 each); labelling from one partner would mark true cryptic residues as
    negatives.
+4. **The residue key carries its insertion code.** `tests/test_icode_keys.py` pins the
+   key format, the build/record spellings agreeing, and all three feature merges joining
+   on the same four-part key. See § 7.
 
 ---
 
-## 7. Not measured
+## 7. The insertion-code key collapse
+
+Author residue numbering is not dense. Proteases and immunoglobulins insert residues
+without renumbering the rest of the chain, so 3bv9 chain B holds **ten** residues at
+position 60 — 60, 60A, 60B … 60I — and six at 149. CryptoBench keys them the way the
+PDB spells them, `B_60` and `B_60A`. This project keyed residues on `(chain, seq_id)`
+alone, which collapsed all ten onto `B_60`.
+
+That failed in both directions at once, which is why it survived so long:
+
+- an annotated `B_60A` matched no observed key, so a true positive was scored negative;
+- an annotated `B_149` matched all six residues at 149, so five residues were handed a
+  positive label they never earned.
+
+The second is the more common failure. Measured on the built table:
+
+| | wrongly labelled 1 | wrongly labelled 0 |
+|---|---|---|
+| cryptic label | **19** | 1 |
+| `in_noncryptic_pocket` | 9 | 3 |
+
+32 residues of 380,930, across six structures (`1fdpA`, `1pfzC`, `3psgA`, `3bn9A`,
+`3oy6U`, `3vhoB`), plus `3bv9B` quarantined outright — 6 of its 29 annotated keys
+carried an insertion code, giving a match rate of 0.793 against the 0.80 threshold.
+Only 9 of 20,387 annotated cryptic keys carry a code at all, which is why exactly one
+structure crossed the line and the rest went unnoticed.
+
+**Every affected residue was in the training split. Zero of 76,636 test rows changed.**
+That is luck rather than design, and it is the reason the correction moves the headline
+so little: the corrected labels reach the model only through the in-context table, where
+they amount to 11 changed rows out of 50,000.
+
+| | before | after |
+|---|---|---|
+| rows / proteins | 380,930 / 1,135 | 381,189 / 1,136 |
+| quarantined | 1 | **0** |
+| 3bv9B match rate | 0.793 | **1.000** |
+| context positives / proteins | 16,282 / 904 | 16,293 / 905 |
+| **AUC (118 feat)** | 0.882 | **0.882** |
+| **AUPRC (118 feat)** | 0.480 | **0.476** |
+
+The AUPRC movement is a context-draw effect, not a label effect — 0.476 sits inside the
+12-seed range of § 4.6 (0.4752 – 0.4846). Every conclusion in § 2.1 survives unchanged;
+the one that did not is in § 5.1.
+
+### What was fixed
+
+`RESIDUE_KEY_FMT` now spells the key `{chain}_{seq_id}{icode}`, and the three places
+that build or consume it agree. The same collision existed a second time downstream:
+`merge_ensemble` and `merge_conservation` joined on the three-part key and called
+`drop_duplicates`, so residues 60A–60I received whichever row survived — the features of
+residue 60. Both now join on the four-part key under `validate="1:1"`, and a duplicate
+key is an error rather than something to deduplicate.
+
+Two related defects were fixed in passing:
+
+- **The ANM seed was not reproducible.** `ensemble_modal` seeded each protein's ensemble
+  with `abs(hash(apo_id))`, and `hash()` on a `str` is salted per interpreter, so every
+  run drew different conformations. It is now blake2b of the id.
+- **`evaluate_modal` could not regenerate `modal_result_esm0.json`** — `esm0` is
+  `tabicl_fanout`'s name for k=0, which no variant in the serial script mapped to. Both
+  names now resolve to the 54-feature table.
+
+The ensemble and conservation features were **backfilled** with their insertion codes
+rather than recomputed, so their values are bit-identical to the runs behind the earlier
+numbers and this comparison isolates the key fix from an ANM reseed. Both producers emit
+one row per residue record in record order, so the code is recoverable positionally;
+alignment was verified `(chain, seq_id)` position by position for all 1,136 structures,
+and independently cross-checked against the ESM feature table, which had carried its own
+`icode` from a separate code path all along — the two agree on 381,189 of 381,189 rows.
+
+---
+
+## 8. Not measured
 
 - Fine-tuned TabICL (`tabicl[finetune]`) — deliberately out of scope; it would forfeit
   the zero-training property that makes the comparison interesting.
-- Sequence conservation (CryptoSite's #2 descriptor) — needs MSAs.
-- ESM-2 embeddings — what pLM-NN itself uses.
 - Fragment docking (CryptoSite's #3) — needs PatchDock + RankScore.
+- The CryptoSite 14-pair external test set — `scripts/cryptosite_testset.py` builds it
+  (none of its apo structures appears in CryptoBench), but scoring has not been run.
+- Context-draw variance for the corrected table — § 4.6's 12 seeds are from the
+  pre-fix run. Re-running costs ~$6.60 of T4 time and was deliberately skipped; the
+  strata analysis in § 5.1 reuses its stored scores, which is valid because it asks
+  about noise magnitude rather than about the corrected point estimate.

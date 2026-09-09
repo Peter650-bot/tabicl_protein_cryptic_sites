@@ -25,8 +25,8 @@ from cryptic_tabicl import config as C  # noqa: E402
 
 # build file -> (n_features, sampler era of its "(context)" rows)
 BASELINES = [
-    ("baselines.json",       34,  "old"),
-    ("baselines_ens.json",   48,  "old"),
+    ("baselines.json",       34,  "fixed"),
+    ("baselines_ens.json",   48,  "fixed"),
     ("baselines_cons.json",  54,  "fixed"),
     ("baselines_esm16.json", 70,  "fixed"),
     ("baselines_esm32.json", 86,  "fixed"),
@@ -34,7 +34,7 @@ BASELINES = [
 ]
 # TabICL runs: build file -> (n_features, sampler era)
 TABICL = [
-    ("modal_result_tierA.json",     34,  "old"),
+    ("modal_result_tierA.json",     34,  "fixed"),
     ("modal_result_ensemble.json",  48,  "fixed"),
     ("modal_result_esm0.json",      54,  "fixed"),
     ("modal_result_esm16.json",     70,  "fixed"),
@@ -42,10 +42,19 @@ TABICL = [
     ("modal_result_esm64.json",     118, "fixed"),
 ]
 # Rows quoted in RESULTS.md that have no stored artifact under build/.
+# Old-sampler rows quoted in RESULTS.md § 3 ("Superseded") that have no stored
+# artifact under build/. Every build file now holds a FIXED-sampler run: the
+# 34- and 48-feature baselines and the 34-feature TabICL run were re-measured
+# on 2026-09-09 so the ladder is one consistent series. These are the values
+# they replaced, kept here because § 4.1 uses them as the sampler bug's evidence.
 NOT_STORED = [
-    "TabICLv2 zero-shot, 48 feat, old sampler 50k  (RESULTS.md: AUC 0.839 / AUPRC 0.323)",
-    "LogisticRegression, 48 feat, fixed sampler 50k (RESULTS.md: AUC 0.848 / AUPRC 0.422)",
-    "TabICLv2 zero-shot x5 contexts, 48 feat, old sampler (RESULTS.md: AUC 0.840 / AUPRC 0.327)",
+    "TabICLv2 zero-shot x5 contexts, 48 feat, old sampler (AUC 0.840 / AUPRC 0.327)",
+    "TabICLv2 zero-shot,              48 feat, old sampler (AUC 0.839 / AUPRC 0.323)",
+    "TabICLv2 zero-shot,              34 feat, old sampler (AUC 0.830 / AUPRC 0.324)",
+    "LogisticRegression,              48 feat, old sampler (AUC 0.827 / AUPRC 0.333)",
+    "RandomForest,                    48 feat, old sampler (AUC 0.822 / AUPRC 0.299)",
+    "RandomForest,                    34 feat, old sampler (AUC 0.820 / AUPRC 0.312)",
+    "LogisticRegression,              34 feat, old sampler (AUC 0.813 / AUPRC 0.324)",
 ]
 
 METRICS = ("AUC", "AUPRC", "TPR", "FPR", "MCC", "F1_weighted")
