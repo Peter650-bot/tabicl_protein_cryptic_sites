@@ -65,7 +65,9 @@ def _build_one(
 
         rows = compute_features(st, recs, noncryptic_keys)
         for row in rows:
-            key = f"{row['chain']}_{row['seq_id']}"
+            # Must match ResidueRecord.key exactly, insertion code included.
+            key = config.RESIDUE_KEY_FMT.format(
+                chain=row["chain"], seq_id=row["seq_id"], icode=row["icode"])
             row[config.LABEL_COL] = int(key in label_keys)
             row[config.GROUP_COL] = apo_id
             row["pdb_id"] = pdb_id

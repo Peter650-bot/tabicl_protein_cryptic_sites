@@ -44,6 +44,18 @@ image = (
 app = modal.App("cryptobench-ensemble")
 
 
+def _seed_for(apo_id: str) -> int:
+    """Per-protein ANM seed, stable across processes.
+
+    `hash()` on a str is salted by PYTHONHASHSEED, which is randomised per
+    interpreter -- so the previous `abs(hash(apo_id))` drew a DIFFERENT ensemble
+    every run and the features were not reproducible. blake2b is content-only.
+    """
+    import hashlib
+    return int.from_bytes(
+        hashlib.blake2b(apo_id.encode(), digest_size=4).digest(), "big") % (2 ** 31)
+
+
 @app.function(image=image, timeout=5400, cpu=2.0, max_containers=40, retries=1)
 def shard(payload: dict) -> list:
     """Ensemble features for one batch of apo structures."""
@@ -67,9 +79,10 @@ def shard(payload: dict) -> list:
                 continue
             feats = compute_ensemble_features(recs, n_conformations=n_conf,
                                               target_rmsd=target_rmsd,
-                                              seed=abs(hash(apo_id)) % (2 ** 31))
+                                              seed=_seed_for(apo_id))
             for rec, f in zip(recs, feats):
-                row = {"apo_id": apo_id, "chain": rec.chain, "seq_id": rec.seq_id}
+                row = {"apo_id": apo_id, "chain": rec.chain,
+                       "seq_id": rec.seq_id, "icode": rec.icode}
                 row.update(f)
                 out.append(row)
             print(f"{apo_id}: {len(recs)} residues in {time.time()-t0:.0f}s", flush=True)

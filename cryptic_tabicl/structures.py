@@ -83,7 +83,8 @@ class ResidueRecord:
 
     @property
     def key(self) -> str:
-        return config.RESIDUE_KEY_FMT.format(chain=self.chain, seq_id=self.seq_id)
+        return config.RESIDUE_KEY_FMT.format(
+            chain=self.chain, seq_id=self.seq_id, icode=self.icode)
 
     @property
     def centroid(self) -> np.ndarray:

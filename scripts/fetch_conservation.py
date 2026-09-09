@@ -92,8 +92,10 @@ def _one(apo_id: str, pdb: str, chains: list[str]) -> dict:
                 cons, [rec.label_seq], [rec.resname])[0]
             if not np.isnan(feats["cons_score"]):
                 matched += 1
+            # icode is part of the residue's identity: without it the merge
+            # back onto the residue table collapses 60/60A/60B onto one key.
             rows.append({"apo_id": apo_id, "chain": rec.chain,
-                         "seq_id": rec.seq_id, **feats})
+                         "seq_id": rec.seq_id, "icode": rec.icode, **feats})
 
         centroids = np.vstack([r.centroid for r in recs])
         conservation.add_neighbourhood(rows, centroids)

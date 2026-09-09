@@ -41,8 +41,18 @@ BUILD_DIR.mkdir(exist_ok=True)
 RCSB_CIF_URL = "https://files.rcsb.org/download/{pdb_id}.cif.gz"
 
 # ---------------------------------------------------------------- task
-# A residue is keyed exactly as CryptoBench keys it: "{auth_asym_id}_{auth_seq_id}".
-RESIDUE_KEY_FMT = "{chain}_{seq_id}"
+# A residue is keyed exactly as CryptoBench keys it:
+# "{auth_asym_id}_{auth_seq_id}{pdbx_PDB_ins_code}".
+#
+# THE INSERTION CODE IS PART OF THE KEY, NOT DECORATION. Author numbering is not
+# dense: proteases and immunoglobulins insert residues without renumbering the
+# rest, so a chain can hold 60, 60A, 60B ... 60I as ten DISTINCT residues.
+# CryptoBench writes those as "B_60A"; dropping the code collapses all ten onto
+# "B_60", which fails in both directions at once -- an annotated "B_60A" matches
+# nothing, and an annotated "B_60" is handed to every residue at position 60.
+# Measured before the fix: 20 mislabelled residues across 6 structures, plus
+# 3bv9B quarantined outright at match rate 0.793. See tests/test_icode_keys.py.
+RESIDUE_KEY_FMT = "{chain}_{seq_id}{icode}"
 
 LABEL_COL = "is_cryptic"
 GROUP_COL = "apo_id"          # grouping unit for every split; never split within a protein

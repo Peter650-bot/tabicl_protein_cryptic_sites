@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cryptic_tabicl import config as C  # noqa: E402
 from cryptic_tabicl.build_table import validate  # noqa: E402
 
-KEYS = ["apo_id", "chain", "seq_id"]
+KEYS = ["apo_id", "chain", "seq_id", "icode"]
 
 
 def main() -> None:
@@ -45,8 +45,19 @@ def main() -> None:
     print(f"conservation : {len(cons):,} rows / {cons[C.GROUP_COL].nunique()} proteins"
           f" / {len(cons_cols)} features")
 
-    cons = cons.drop_duplicates(subset=KEYS)
-    merged = base.merge(cons[KEYS + cons_cols], on=KEYS, how="left")
+    # Normalise icode on both sides: parquet round-trips a blank code as NaN
+    # on one side and "" on the other, which would silently fail every join.
+    for d in (base, cons):
+        d["icode"] = d["icode"].fillna("").astype(str)
+
+    # With icode in the key both sides are unique, so the merge is 1:1 and is
+    # asserted to be. Dropping duplicates here instead -- as this did before
+    # icode was part of the key -- handed every residue at position 60 the
+    # features of whichever one happened to survive.
+    if cons.duplicated(KEYS).any():
+        raise SystemExit("cons table has duplicate keys; the merge would fan out")
+    merged = base.merge(cons[KEYS + cons_cols], on=KEYS, how="left",
+                        validate="1:1")
 
     assert len(merged) == len(base), "merge changed the row count"
     assert merged[C.GROUP_COL].nunique() == base[C.GROUP_COL].nunique(), \
