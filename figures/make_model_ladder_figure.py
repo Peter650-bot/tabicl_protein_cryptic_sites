@@ -43,10 +43,12 @@ PLMNN = {"AUPRC": 0.36, "AUC": 0.86, "MCC": 0.39}
 # Axes are cropped to the model range. A dot's POSITION encodes the value --
 # there is no bar length to mislead -- and the full 0-1 range would collapse
 # every dot in a row onto the same pixel, which is the opposite of the point.
-COLUMNS = [("AUPRC", (0.28, 0.50), [.30, .35, .40, .45]),
-           ("AUC",   (0.80, 0.89), [.82, .84, .86, .88]),
-           ("MCC",   (0.17, 0.43), [.20, .25, .30, .35, .40])]
+COLUMNS = [("AUPRC", (0.385, 0.487), [.40, .42, .44, .46]),
+           ("AUC",   (0.826, 0.890), [.84, .85, .86, .87, .88]),
+           ("MCC",   (0.215, 0.425), [.25, .30, .35, .40])]
 
+# "old sampler" no longer appears in build/model_ladder.json — every row was
+# re-measured on the fixed sampler. Kept so an archived ladder still renders.
 REGIME_ORDER = {"50k context · fixed sampler": 0,
                 "50k context · old sampler": 1,
                 "full 304k train": 2}
@@ -150,14 +152,14 @@ fig.suptitle("Model choice moves the number far less than the features do",
              fontweight="semibold")
 fig.text(.028, .945,
          "Every configuration we ran, on CB-full (231 apo structures). One row per condition — same features, same negatives — so the "
-         "horizontal spread inside a row\nis the model effect alone (0.005–0.038 AUPRC). The vertical distance between rows is the feature "
-         "and sampler effect (0.30 → 0.48). Axes are cropped to the\nmodel range: a dot's position encodes the value, and the full 0–1 range "
+         "horizontal spread inside a row\nis the model effect alone (0.003–0.030 AUPRC). The vertical distance between rows is the feature "
+         "effect (0.398 → 0.476). Axes are cropped to the\nmodel range: a dot's position encodes the value, and the full 0–1 range "
          "would collapse every dot in a row onto one pixel.",
          ha="left", fontsize=8.8, color=INK2, linespacing=1.55, va="top")
 fig.text(.028, .022,
          "Our sklearn controls exist on CB-full only — the stored artifacts keep summary metrics, not per-residue scores, so they cannot be "
-         "re-scored on CB-P2RANK-apo.   ·   TabICL has no full-304k row by construction: 304k rows do not fit in context — that ceiling is "
-         "Finding 1.\nRSA alone, the single-feature floor, sits far below the cropped axes at AUPRC 0.089 / AUC 0.499 / MCC 0.034.   ·   "
+         "re-scored on CB-P2RANK-apo.   ·   TabICL has no full-304k row by construction: 304k rows do not fit in context, so the\nfull-304k "
+         "rows are the sklearn models’ best case — and TabICL in 50k of context still leads them.   ·   RSA alone, the single-feature floor, sits far below the cropped axes at AUPRC 0.089 / AUC 0.499 / MCC 0.034.   ·   "
          "Rebuild: python scripts/model_ladder.py",
          ha="left", fontsize=7.2, color=MUTED, linespacing=1.6)
 

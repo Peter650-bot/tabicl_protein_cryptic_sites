@@ -111,7 +111,7 @@ def fig_dataset():
     ax = fig.add_subplot(gs[0]); ax.axis("off")
     ax.set_xlim(0, 1); ax.set_ylim(0, 1)
     ax.text(0.5, 0.97, "CryptoBench", ha="center", fontsize=15, fontweight="bold")
-    rows = [("380,930", "residues"), ("1,135", "apo structures"),
+    rows = [("381,189", "residues"), ("1,136", "apo structures"),
             ("5,493", "apo→holo pairings"), ("5.3 %", "are cryptic")]
     for i, (big, small) in enumerate(rows):
         y = 0.76 - i * 0.20
@@ -122,12 +122,12 @@ def fig_dataset():
     # (b) split
     ax = fig.add_subplot(gs[1])
     labels = ["train\nfold 0", "fold 1", "fold 2", "fold 3", "TEST"]
-    vals = [222, 228, 226, 228, 231]      # measured from build/residues.parquet
+    vals = [223, 228, 226, 228, 231]      # measured from build/residues.parquet
     cols = [BLUE] * 4 + [ORANGE]
     b = ax.bar(range(5), vals, color=cols, width=0.68)
     ax.set_xticks(range(5)); ax.set_xticklabels(labels, fontsize=11)
     ax.set_ylabel("apo structures")
-    ax.set_title("Split by sequence identity\n904 train  /  231 test",
+    ax.set_title("Split by sequence identity\n905 train  /  231 test",
                  fontsize=13, fontweight="bold", pad=12)
     ax.text(1.5, 250, "used only to pick\nthe threshold", ha="center", fontsize=10.5,
             color=MUTED, linespacing=1.4)
@@ -284,10 +284,10 @@ def fig_tabicl():
 # ------------------------------------------------------------------ 7. results
 def fig_results():
     metrics = ["AUC", "AUPRC", "TPR", "MCC"]
-    ours = [0.882, 0.480, 0.595, 0.414]
-    ours_lo = [0.862, 0.443, 0.550, 0.381]
-    ours_hi = [0.900, 0.518, 0.639, 0.447]
-    noplm = [0.868, 0.453, 0.567, 0.391]
+    ours = [0.882, 0.476, 0.591, 0.410]
+    ours_lo = [0.863, 0.439, 0.546, 0.377]
+    ours_hi = [0.901, 0.514, 0.635, 0.443]
+    noplm = [0.867, 0.450, 0.565, 0.389]
     plmnn = [0.86, 0.36, 0.48, 0.39]
 
     fig, ax = plt.subplots(figsize=(11, 4.6))
@@ -311,7 +311,7 @@ def fig_results():
     ax.set_title("CB-full  —  all 231 test structures, per structure then averaged",
                  fontsize=14, fontweight="bold", pad=14)
     ax.text(0.0, -0.20, "Bars for our best model carry a 95 % CI from resampling the 231 test proteins. "
-            "AUPRC and TPR clear pLM-NN's value; AUC and MCC do not.",
+            "AUPRC and TPR clear pLM-NN's value; MCC does not, and the AUC margin clears only here \u2014 not on\nCB-P2RANK-apo, and not without ESM \u2014 so it is not a lead to report.",
             transform=ax.transAxes, fontsize=11, color=MUTED)
     save(fig, "07_results")
 
@@ -322,7 +322,7 @@ def fig_gains():
     items = [("Averaging over 5 contexts", 0.004, GRAY, "5× GPU inference"),
              ("+14 ensemble pocket features", 0.014, GREEN, "~28,000 fpocket runs"),
              ("+6 conservation features", 0.017, PURPLE, "~2,300 API calls"),
-             ("+64 ESM-2 components", 0.027, ORANGE, "GPU embedding pass"),
+             ("+64 ESM-2 components", 0.026, ORANGE, "0.06 A10G-hours"),
              ("Fixing the negative sampler", 0.113, RED, "one line"),
              ]
     names = [i[0] for i in items]
@@ -337,8 +337,9 @@ def fig_gains():
         ax.text(v + 0.026, yi, c, va="center", fontsize=10.5, color=MUTED)
     ax.set_xlim(0, 0.16); ax.set_xlabel("Δ AUPRC")
     ax.set_title("What actually moved the number", fontsize=15, fontweight="bold", pad=12)
-    ax.text(0.0, -0.24, "The biggest single gain was a bug fix. The three deliberate capability "
-            "additions were the three smallest.",
+    ax.text(0.0, -0.30, "The biggest single gain was a bug fix. The three deliberate capability "
+            "additions were the three smallest.\nA fourth bug fix, the insertion-code key (\u00a7 7), is not plotted: it "
+            "corrected 32 mislabelled training residues for \u22120.004 AUPRC, inside the context-draw noise.",
             transform=ax.transAxes, fontsize=11.5, color=MUTED)
     save(fig, "08_gains")
 
@@ -347,22 +348,22 @@ def fig_gains():
 def fig_strata():
     fig, ax = plt.subplots(figsize=(10.5, 4.3))
     steps = ["Tier A", "+ ensemble", "+ conservation", "+ ESM-16", "+ ESM-32", "+ ESM-64"]
-    hard = [0.677, 0.681, 0.699, 0.707, 0.714, 0.714]
-    bulk = [np.nan, np.nan, 0.851, 0.866, 0.875, 0.878]
+    hard = [0.667, 0.672, 0.690, 0.705, 0.710, 0.714]
+    bulk = [0.824, 0.838, 0.852, 0.867, 0.876, 0.879]
     x = np.arange(len(steps))
     ax.plot(x, bulk, "o-", color=BLUE, lw=2.6, ms=8, label="bulk surface  (73,296 residues)")
     ax.plot(x, hard, "o-", color=RED, lw=2.6, ms=8, label="lines an already-open pocket  (3,340)")
-    ax.fill_between(x[2:], hard[2:], bulk[2:], color="#fed7d7", alpha=0.55, zorder=0)
-    ax.annotate("", xy=(5, 0.878), xytext=(5, 0.714),
+    ax.fill_between(x, hard, bulk, color="#fed7d7", alpha=0.55, zorder=0)
+    ax.annotate("", xy=(5, 0.879), xytext=(5, 0.714),
                 arrowprops=dict(arrowstyle="<->", color=RED, lw=1.8))
-    ax.text(4.82, 0.796, "gap\n0.164", ha="right", fontsize=11.5, color=RED,
+    ax.text(4.82, 0.796, "gap\n0.165", ha="right", fontsize=11.5, color=RED,
             fontweight="bold", linespacing=1.4)
     ax.set_xticks(x); ax.set_xticklabels(steps, fontsize=11)
     ax.set_ylabel("AUC"); ax.set_ylim(0.63, 0.93)
     ax.legend(frameon=False, fontsize=11, loc="upper left")
     ax.set_title("Where the model is weak", fontsize=15, fontweight="bold", pad=12)
-    ax.text(0.0, -0.22, "ESM did not close the gap — it widened it, from 0.152 to 0.164. "
-            "Telling a cryptic site from a pocket that is already open is the task itself.",
+    ax.text(0.0, -0.22, "Nothing closes the gap: it sits at 0.157\u20130.166 across every feature set, and each "
+            "addition lifts both strata together.\nTelling a cryptic site from a pocket that is already open is the task itself.",
             transform=ax.transAxes, fontsize=11.5, color=MUTED)
     save(fig, "09_strata")
 

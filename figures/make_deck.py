@@ -248,10 +248,10 @@ bullets(s, [
      "to test.", INK, False),
     ("Bookkeeping is the part that goes wrong silently.", RED, True),
     ("159 residues share an (apo_id, chain, seq_id) key with another — insertion codes, where two "
-     "residues are numbered 52A and 52B. Joining on that key alone would fan those rows out, so "
-     "every function carries an explicit ordinal alongside the key.", MUTED, False),
+     "residues are numbered 52A and 52B. The residue key now carries the insertion code everywhere, "
+     "and all three feature merges join on that four-part key under a 1:1 assertion.", MUTED, False),
 ], y=1.80, size=16, gap=13)
-note(s, "Gains saturate: 16 → 32 components helps, 32 → 64 does not (AUPRC 0.480 either way).",
+note(s, "Gains shrink but do not stop: 16 → 32 components adds +0.008 AUPRC, 32 → 64 adds +0.004 — the last step sits at the context-draw noise floor.",
      top=6.45)
 
 # ============================================================ 11. TabICL
@@ -269,10 +269,10 @@ note(s, "The 54-feature row is the stronger claim — it beats pLM-NN using no l
 s = new("The other methods on CryptoBench", "Only CB-full is a like-for-like comparison with us.")
 table(s, [
     ["Method", "Subset", "AUC", "AUPRC", "TPR", "FPR", "MCC", "F1 (wtd)"],
-    ["TabICLv2 + ESM  (this work)", "CB-full", "0.882", "0.480", "0.595", "0.062", "0.414", "0.922"],
-    ["TabICLv2, no pLM  (this work)", "CB-full", "0.868", "0.453", "0.567", "0.063", "0.391", "0.919"],
+    ["TabICLv2 + ESM  (this work)", "CB-full", "0.882", "0.476", "0.591", "0.062", "0.410", "0.921"],
+    ["TabICLv2, no pLM  (this work)", "CB-full", "0.867", "0.450", "0.565", "0.064", "0.389", "0.918"],
     ["pLM-NN  (benchmark)", "CB-full", "0.86", "0.36", "0.48", "0.05", "0.39", "0.92"],
-    ["TabICLv2 + ESM  (this work)", "CB-P2RANK-apo", "0.884", "0.504", "0.606", "0.061", "0.429", "0.923"],
+    ["TabICLv2 + ESM  (this work)", "CB-P2RANK-apo", "0.885", "0.501", "0.602", "0.062", "0.425", "0.922"],
     ["pLM-NN", "CB-P2RANK-apo", "0.88", "0.42", "0.51", "0.04", "0.43", "0.93"],
     ["P2Rank", "CB-P2RANK-apo", "0.81", "0.21", "0.62", "0.14", "0.27", "0.81"],
     ["pLM-NN", "CB-PM", "0.88", "0.43", "0.52", "0.04", "0.44", "0.93"],
@@ -297,17 +297,19 @@ note(s, "A separate bug — a missing altLoc column, which shifted every field i
 # ============================================================ 15. weakness
 s = new("Where the model is weak", "One stratum resists everything we have tried.")
 picture(s, "09_strata", top=1.80, width=10.2)
-note(s, "What has NOT helped here: 28,000 fpocket runs over conformational ensembles (+0.001), the "
-        "sampler fix (+0.001), context averaging (0.000), and now ESM. That points the same way — "
-        "what separates these two classes appears to be a property of MOTION, not of sequence or of "
-        "static shape.", top=6.30, color=INK)
+note(s, "Every addition lifts BOTH strata by about the same amount, so the gap never closes: "
+        "28,000 fpocket runs over conformational ensembles are the weakest of the three (+0.005 here), "
+        "and ESM buys +0.024 on this stratum against +0.027 on the bulk. What separates these two "
+        "classes appears to be a property of MOTION, not of sequence or of static shape.",
+     top=6.30, color=INK)
 
 # ============================================================ 16. status
 s = new("Where it stands", None)
 bullets(s, [
     ("Settled", GREEN, True),
-    ("0.882 AUC / 0.480 AUPRC on CB-full, zero-shot. AUPRC and TPR beat pLM-NN by margins that "
-     "survive resampling the 231 test proteins; AUC and MCC do not.", MUTED, False),
+    ("0.882 AUC / 0.476 AUPRC on CB-full, zero-shot. AUPRC and TPR beat pLM-NN by margins that "
+     "survive resampling the 231 test proteins. MCC does not, and the AUC margin holds only for the "
+     "118-feature run on CB-full — not on CB-P2RANK-apo, and not without ESM.", MUTED, False),
     ("Measured, not assumed", GREEN, True),
     ("Two separate uncertainties are quantified: test-set sampling (95 % CIs, 10,000 bootstrap "
      "resamples) and the 50k context draw (12 seeds on Modal). Together they set a noise floor — "

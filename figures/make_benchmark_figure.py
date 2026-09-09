@@ -31,11 +31,11 @@ SUBSETS = [
     ("holo",  "CB-P2RANK-holo", "holo input — diff. task", True),
 ]
 DATA = {
-    "full":  {"tabicl_esm":  dict(auprc=.480, auc=.882, mcc=.414, f1=.922, tpr=.595, fpr=.062),
-              "tabicl":      dict(auprc=.453, auc=.868, mcc=.391, f1=.919, tpr=.567, fpr=.063),
+    "full":  {"tabicl_esm":  dict(auprc=.476, auc=.882, mcc=.410, f1=.921, tpr=.591, fpr=.062),
+              "tabicl":      dict(auprc=.450, auc=.867, mcc=.389, f1=.918, tpr=.565, fpr=.064),
               "plmnn":       dict(auprc=.36,  auc=.86,  mcc=.39,  f1=.92,  tpr=.48,  fpr=.05)},
-    "p2apo": {"tabicl_esm":  dict(auprc=.504, auc=.884, mcc=.429, f1=.923, tpr=.606, fpr=.061),
-              "tabicl":      dict(auprc=.473, auc=.867, mcc=.404, f1=.919, tpr=.570, fpr=.061),
+    "p2apo": {"tabicl_esm":  dict(auprc=.501, auc=.885, mcc=.425, f1=.922, tpr=.602, fpr=.062),
+              "tabicl":      dict(auprc=.471, auc=.868, mcc=.405, f1=.919, tpr=.571, fpr=.063),
               "plmnn":       dict(auprc=.42,  auc=.88,  mcc=.43,  f1=.93,  tpr=.51,  fpr=.04),
               "p2rank":      dict(auprc=.21,  auc=.81,  mcc=.27,  f1=.81,  tpr=.62,  fpr=.14)},
     "pm":    {"plmnn":       dict(auprc=.43,  auc=.88,  mcc=.44,  f1=.93,  tpr=.52,  fpr=.04),
@@ -128,7 +128,7 @@ nax.text(-.02, 1.02,
          "trivially negative. Every pLM-based row lands at 0.92–0.93; the\n"
          "column separates the structure-only tools and nothing else.\n\n"
          "Our positive-class F1 — the number that carries information — is\n"
-         "0.418 (118 feat) and 0.399 (54 feat) on CB-full. It is NOT\n"
+         "0.415 (118 feat) and 0.397 (54 feat) on CB-full. It is NOT\n"
          "comparable to the published column and is deliberately not plotted\n"
          "beside it.\n\n"
          "Reproduce every value above with:\n"
