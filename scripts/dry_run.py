@@ -33,7 +33,8 @@ print(f"predict {len(te):,} rows: {time.time()-t0:.1f}s", flush=True)
 
 # threshold chosen on the context only, never on test
 ctx_scores = p.predict_by_protein(ctx)
-thr = evaluate.choose_threshold(ctx[C.LABEL_COL].to_numpy(), ctx_scores)
+thr = evaluate.choose_threshold(ctx[C.LABEL_COL].to_numpy(), ctx_scores,
+                                ctx[C.GROUP_COL].to_numpy())
 print(f"threshold @FPR<={C.TARGET_FPR}: {thr:.4f}", flush=True)
 
 res = evaluate.summarise(te[C.LABEL_COL].to_numpy(), scores,

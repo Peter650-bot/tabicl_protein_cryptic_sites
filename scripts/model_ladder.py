@@ -23,30 +23,39 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cryptic_tabicl import config as C  # noqa: E402
 
+# Feature counts dropped by one on 2026-09-10 (34->33, 48->47, ...): the
+# holo-derived `in_noncryptic_pocket` annotation was removed from the feature
+# set. It is still in the table, because `evaluate.stratified` needs it, but it
+# can no longer be computed at prediction time so it can no longer be an input.
+# See config.HOLO_DERIVED_METADATA_COLS.
+#
 # build file -> (n_features, sampler era of its "(context)" rows)
 BASELINES = [
-    ("baselines.json",       34,  "fixed"),
-    ("baselines_ens.json",   48,  "fixed"),
-    ("baselines_cons.json",  54,  "fixed"),
-    ("baselines_esm16.json", 70,  "fixed"),
-    ("baselines_esm32.json", 86,  "fixed"),
-    ("baselines_esm64.json", 118, "fixed"),
+    ("baselines.json",       33,  "fixed"),
+    ("baselines_ens.json",   47,  "fixed"),
+    ("baselines_cons.json",  53,  "fixed"),
+    ("baselines_esm16.json", 69,  "fixed"),
+    ("baselines_esm32.json", 85,  "fixed"),
+    ("baselines_esm64.json", 117, "fixed"),
 ]
 # TabICL runs: build file -> (n_features, sampler era)
 TABICL = [
-    ("modal_result_tierA.json",     34,  "fixed"),
-    ("modal_result_ensemble.json",  48,  "fixed"),
-    ("modal_result_esm0.json",      54,  "fixed"),
-    ("modal_result_esm16.json",     70,  "fixed"),
-    ("modal_result_esm32.json",     86,  "fixed"),
-    ("modal_result_esm64.json",     118, "fixed"),
+    ("modal_result_tierA.json",     33,  "fixed"),
+    ("modal_result_ensemble.json",  47,  "fixed"),
+    ("modal_result_esm0.json",      53,  "fixed"),
+    ("modal_result_esm16.json",     69,  "fixed"),
+    ("modal_result_esm32.json",     85,  "fixed"),
+    ("modal_result_esm64.json",     117, "fixed"),
 ]
-# Rows quoted in RESULTS.md that have no stored artifact under build/.
 # Old-sampler rows quoted in RESULTS.md § 3 ("Superseded") that have no stored
-# artifact under build/. Every build file now holds a FIXED-sampler run: the
-# 34- and 48-feature baselines and the 34-feature TabICL run were re-measured
-# on 2026-09-09 so the ladder is one consistent series. These are the values
-# they replaced, kept here because § 4.1 uses them as the sampler bug's evidence.
+# artifact under build/. Every build file now holds a FIXED-sampler, NO-LEAK run:
+# everything was re-measured on 2026-09-10 after `in_noncryptic_pocket` was
+# removed from the feature set, so the ladder is one consistent series again.
+#
+# The rows below are doubly superseded -- old sampler AND holo-derived feature --
+# and are kept only because § 4.1 uses them as the sampler bug's evidence. Their
+# feature counts are the pre-removal ones (34/48) by design: that is what those
+# runs actually saw. Do not compare them to the ladder above.
 NOT_STORED = [
     "TabICLv2 zero-shot x5 contexts, 48 feat, old sampler (AUC 0.840 / AUPRC 0.327)",
     "TabICLv2 zero-shot,              48 feat, old sampler (AUC 0.839 / AUPRC 0.323)",
@@ -66,7 +75,7 @@ def rows() -> list[dict]:
         for r in json.loads((C.BUILD_DIR / fname).read_text()):
             m = r["method"]
             if m.startswith("RSA"):
-                if nfeat == 118:          # identical in every file; keep one
+                if nfeat == 117:          # identical in every file; keep one
                     out.append(dict(family="RSA alone (floor)", n_features=1,
                                     negatives="—", condition="floor",
                                     **{k: r.get(k) for k in METRICS}))

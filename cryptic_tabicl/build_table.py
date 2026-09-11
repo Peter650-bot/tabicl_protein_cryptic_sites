@@ -181,11 +181,20 @@ def validate(table: pd.DataFrame) -> List[str]:
             problems.append(f"column '{col}' is float16")
 
     # The leakage invariant: nothing holo-derived may be a feature.
+    #
+    # Two halves, because either alone is insufficient. The substring pass
+    # catches columns NAMED after a holo quantity; the by-name pass catches the
+    # ones that are holo-derived without saying so -- `in_noncryptic_pocket`
+    # named none of the forbidden substrings and reached the model for the whole
+    # first measurement era.
     for col in feature_cols:
         low = col.lower()
         for bad in config.FORBIDDEN_FEATURE_SUBSTRINGS:
             if bad in low:
                 problems.append(f"column '{col}' looks holo-derived ('{bad}')")
+    for col in sorted(config.HOLO_DERIVED_METADATA_COLS & set(feature_cols)):
+        problems.append(
+            f"column '{col}' is holo-derived metadata and must not be a feature")
 
     # Splits must not share a protein.
     if "split" in table:

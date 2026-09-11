@@ -58,11 +58,38 @@ LABEL_COL = "is_cryptic"
 GROUP_COL = "apo_id"          # grouping unit for every split; never split within a protein
 RESIDUE_ID_COLS = ("apo_id", "chain", "seq_id", "icode")
 
+# Columns computed FROM THE HOLO STRUCTURE. They are kept in the table because
+# they are legitimate for stratifying an evaluation, and must never be handed to
+# the model, because at prediction time there is no holo structure to compute
+# them from.
+#
+# `in_noncryptic_pocket` is the one that matters, and it is not obviously
+# holo-derived from its name -- which is exactly why it survived a substring
+# blacklist for so long. CryptoBench builds that annotation in
+# `src/E-add-noncryptic-pockets/main.py`:
+#
+#     additional_noncryptic[additional_noncryptic['apo_pocket_rms']
+#                           < filter_utils.MAX_POCKET_RMSD]
+#
+# `apo_pocket_rms` is how far the pocket moved between apo and holo. That is the
+# SAME measurement as the label, with the inequality flipped: the label says
+# "this pocket changes shape when a ligand binds", the annotation says "this one
+# does not". Both need the holo partner. Measured on the built table it carries a
+# 44.0% positive rate against 3.5% elsewhere, and 36% of every cryptic residue in
+# the test set sits inside the 4.4% of rows it flags. Feeding it to the model was
+# worth ~0.066 AUPRC of unearned performance (sklearn controls, both directions).
+HOLO_DERIVED_METADATA_COLS = frozenset({"in_noncryptic_pocket"})
+
 # Columns that exist for bookkeeping and must never be handed to the model.
-NON_FEATURE_COLS = set(RESIDUE_ID_COLS) | {LABEL_COL, GROUP_COL, "fold", "split"}
+NON_FEATURE_COLS = (set(RESIDUE_ID_COLS) | {LABEL_COL, GROUP_COL, "fold", "split"}
+                   | set(HOLO_DERIVED_METADATA_COLS))
 
 # Anything derived from the holo structure is the label in disguise. Named here
 # so a test can assert none of these ever appear as a feature column.
+#
+# A substring blacklist alone is NOT sufficient -- it only catches leaks that
+# happen to be named after the leak. `HOLO_DERIVED_METADATA_COLS` above is the
+# by-name half of the guard, and `build_table.validate` enforces both.
 FORBIDDEN_FEATURE_SUBSTRINGS = (
     "holo", "prmsd", "delta_drug", "ddrug", "dvolume", "dvol", "rmsd_to_holo",
 )
@@ -84,6 +111,11 @@ HARD_NEGATIVE_SHARE = 0.0
 
 # The benchmark reports TPR at a low FPR; we sweep the threshold on train folds
 # to hit this, rather than assuming 0.5.
+#
+# The sweep targets the MEAN PER-PROTEIN FPR, which is the statistic CryptoBench
+# publishes and the one this project reports. It used to target the pooled FPR
+# instead -- a different quantity, dominated by the largest proteins. See
+# `evaluate.choose_threshold`.
 TARGET_FPR = 0.05
 
 # ---------------------------------------------------------------- chemistry
@@ -108,6 +140,17 @@ MAX_ASA = {
 }
 
 STANDARD_AA = tuple(sorted(MAX_ASA))
+
+# One-letter -> three-letter, for resolving a modified residue to its parent.
+# gemmi's component table reports the parent as a LOWER-case one-letter code
+# (MSE -> 'm'); see `structures.parent_residue`.
+ONE_TO_THREE = {
+    "A": "ALA", "R": "ARG", "N": "ASN", "D": "ASP", "C": "CYS",
+    "Q": "GLN", "E": "GLU", "G": "GLY", "H": "HIS", "I": "ILE",
+    "L": "LEU", "K": "LYS", "M": "MET", "F": "PHE", "P": "PRO",
+    "S": "SER", "T": "THR", "W": "TRP", "Y": "TYR", "V": "VAL",
+}
+assert set(ONE_TO_THREE.values()) == set(MAX_ASA), "residue tables disagree"
 
 # Bondi van der Waals radii, for Shrake-Rupley.
 VDW_RADII = {"C": 1.70, "N": 1.55, "O": 1.52, "S": 1.80, "P": 1.80,

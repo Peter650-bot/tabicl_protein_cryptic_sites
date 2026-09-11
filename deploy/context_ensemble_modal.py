@@ -156,7 +156,7 @@ def main(k: int = 5, n_estimators: int = 8, budget: int = 50_000,
     test_mat = np.stack([by_target["test"][s] for s in range(k)])
 
     y_te, g_te = test[C.LABEL_COL].to_numpy(), test[C.GROUP_COL].to_numpy()
-    y_va = val[C.LABEL_COL].to_numpy()
+    y_va, g_va = val[C.LABEL_COL].to_numpy(), val[C.GROUP_COL].to_numpy()
 
     results = {"k": k, "budget": budget, "curves": {}, "final": {}}
 
@@ -167,7 +167,8 @@ def main(k: int = 5, n_estimators: int = 8, budget: int = 50_000,
         for kk in range(1, k + 1):
             s_va = combine(val_mat[:kk], how)
             s_te = combine(test_mat[:kk], how)
-            thr = evaluate.choose_threshold(y_va, s_va)   # threshold from val only
+            # Threshold from val only, targeting the mean PER-PROTEIN FPR.
+            thr = evaluate.choose_threshold(y_va, s_va, g_va)
             r = evaluate.summarise(y_te, s_te, g_te, thr,
                                    label=f"TabICL x{kk} ({how})")
             curve.append(r)

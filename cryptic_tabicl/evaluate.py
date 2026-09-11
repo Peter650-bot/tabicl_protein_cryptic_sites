@@ -88,17 +88,92 @@ def _safe_auprc(y: np.ndarray, s: np.ndarray) -> float:
     return float(metrics.auc(recall, precision))
 
 
-def choose_threshold(y: np.ndarray, scores: np.ndarray,
-                     target_fpr: float = config.TARGET_FPR) -> float:
-    """Lowest threshold whose pooled FPR does not exceed `target_fpr`.
+def mean_per_protein_fpr(
+    y: Sequence[int], scores: Sequence[float], groups: Sequence[str],
+    threshold: float,
+) -> float:
+    """The FPR this project reports: per protein, then averaged over proteins."""
+    y = np.asarray(y, dtype=int)
+    pred = np.asarray(scores, dtype=float) >= threshold
+    g = np.asarray(groups)
+    neg = y == 0
+    if not neg.any():
+        return float("nan")
+    gn, pn = g[neg], pred[neg]
+    uniq, inv = np.unique(gn, return_inverse=True)
+    fp = np.bincount(inv, weights=pn.astype(float), minlength=len(uniq))
+    n = np.bincount(inv, minlength=len(uniq))
+    return float((fp / n).mean())
+
+
+def choose_threshold(
+    y: Sequence[int], scores: Sequence[float], groups: Sequence[str],
+    target_fpr: float = config.TARGET_FPR,
+) -> float:
+    """Lowest threshold whose MEAN PER-PROTEIN FPR does not exceed `target_fpr`.
 
     Selected on training data only, then frozen.
+
+    WHY PER-PROTEIN AND NOT POOLED
+        CryptoBench evaluates one protein at a time and averages the per-protein
+        numbers -- `src/H-prediction-evaluation/pocketminer_stats.py` writes an
+        "average" row as `sum(avg_fpr) / counter`, over `Protein.get_FPR()` values
+        from `src/I-final/Protein.py`. It also emits a pooled "overall" row, but
+        the average is the headline, and it is the convention this project matches
+        everywhere else (see `per_protein` and `summarise`).
+
+        This function used to call `sklearn.roc_curve`, which pools every residue
+        of every protein into one bucket -- so a 1,138-residue protein counted
+        twenty times more than a 57-residue one. The threshold was therefore tuned
+        against a quantity the project never reports. Measured on the 118-feature
+        scores at the old frozen threshold: pooled FPR 0.0658, mean per-protein
+        FPR 0.0621. Targeting the reported statistic instead moves the threshold
+        0.568 -> 0.636 and TPR 0.591 -> 0.544.
+
+        Note that CryptoBench itself does not sweep to a target FPR at all -- it
+        fixes a constant and reports whatever FPR follows. Its own sources do not
+        agree on the constant: the paper text says the threshold was set at 0.95
+        on a validation set, while `src/I-final/benchmark-example.py` hardcodes
+        `DECISION_THRESHOLD = 0.75` and calls that the paper's value (PocketMiner
+        was scored at 0.7). The discrepancy does not matter here -- either way it
+        is a fixed constant, not an FPR-targeted sweep. Sweeping is this project's
+        own choice; the point is only that it must sweep the statistic it then
+        publishes. See the module docstring for the threshold rationale.
+
+    HOW
+        Exactly, in one pass, without assuming monotonicity. Weight each negative
+        residue by `1 / (n_proteins * n_negatives_in_its_protein)`; then the mean
+        per-protein FPR at a threshold is precisely the sum of the weights of the
+        negatives that threshold admits. Sorting by score descending and taking a
+        cumulative sum gives every attainable FPR at once.
     """
-    fpr, _tpr, thr = metrics.roc_curve(y, scores)
-    ok = np.where(fpr <= target_fpr)[0]
+    y = np.asarray(y, dtype=int)
+    s = np.asarray(scores, dtype=float)
+    g = np.asarray(groups)
+    if not (len(y) == len(s) == len(g)):
+        raise ValueError("y, scores and groups must be the same length")
+
+    neg = y == 0
+    if not neg.any():
+        # No negatives to constrain the FPR; admit nothing rather than everything.
+        return float(np.max(s)) if len(s) else 0.5
+
+    sn, gn = s[neg], g[neg]
+    uniq, inv, counts = np.unique(gn, return_inverse=True, return_counts=True)
+    w = 1.0 / (len(uniq) * counts[inv])
+
+    order = np.argsort(-sn, kind="stable")
+    sn, w = sn[order], w[order]
+    cum = np.cumsum(w)
+
+    # A threshold cannot separate negatives that share a score, so only the last
+    # index of each tie-group is an attainable operating point.
+    tie_end = np.append(np.flatnonzero(np.diff(sn)), len(sn) - 1)
+    ok = tie_end[cum[tie_end] <= target_fpr]
     if len(ok) == 0:
-        return float(np.max(scores))
-    return float(thr[ok[-1]])
+        # Even the single highest-scoring negative already breaks the budget.
+        return float(np.nextafter(sn[0], np.inf))
+    return float(sn[ok[-1]])
 
 
 def per_protein(

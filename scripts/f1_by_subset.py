@@ -32,8 +32,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cryptic_tabicl import config as C, evaluate  # noqa: E402
 
 VARIANTS = [
-    ("modal_result_esm64.json", "TabICLv2 + ESM (118 feat)"),
-    ("modal_result_esm0.json",  "TabICLv2, no pLM (54 feat)"),
+    ("modal_result_esm64.json", "TabICLv2 + ESM (117 feat)"),
+    ("modal_result_esm0.json",  "TabICLv2, no pLM (53 feat)"),
 ]
 
 # Published CryptoBench table (external/CryptoBench/README.md). F1 is weighted.

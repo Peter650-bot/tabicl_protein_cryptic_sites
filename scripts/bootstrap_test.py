@@ -31,8 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cryptic_tabicl import config as C, evaluate  # noqa: E402
 from scripts.f1_by_subset import single_chain_pdbs  # noqa: E402
 
-VARIANTS = [("modal_result_esm64.json", "TabICLv2 + ESM (118 feat)"),
-            ("modal_result_esm0.json",  "TabICLv2, no pLM (54 feat)")]
+VARIANTS = [("modal_result_esm64.json", "TabICLv2 + ESM (117 feat)"),
+            ("modal_result_esm0.json",  "TabICLv2, no pLM (53 feat)")]
 METRICS = ["AUC", "AUPRC", "TPR", "FPR", "MCC", "F1_weighted"]
 PUBLISHED = {           # pLM-NN, for "does their point estimate sit inside ours?"
     "CB-full":       {"AUC": .86, "AUPRC": .36, "TPR": .48, "FPR": .05, "MCC": .39, "F1_weighted": .92},

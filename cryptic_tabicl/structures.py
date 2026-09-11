@@ -21,6 +21,7 @@ SOLVENT ACCESSIBILITY
 """
 from __future__ import annotations
 
+import functools
 import gzip
 import urllib.request
 from dataclasses import dataclass, field
@@ -80,6 +81,10 @@ class ResidueRecord:
     bfactors: np.ndarray          # (n_atoms,)
     ca_xyz: np.ndarray | None
     cb_xyz: np.ndarray | None
+    # The name as the PDB spells it. Equal to `resname` for the standard 20; for
+    # a modified residue `resname` carries the PARENT and this carries the
+    # original, so the substitution is auditable and countable. Never a feature.
+    resname_observed: str | None = None
 
     @property
     def key(self) -> str:
@@ -91,13 +96,72 @@ class ResidueRecord:
         return self.atom_xyz.mean(axis=0)
 
 
+# Selenomethionine is the one modified residue common enough to matter (it was
+# 191 of 263 dropped residues in a 200-structure sample, and 8% of structures
+# carry it). It is ISOSTERIC with methionine by design -- crystallographers use
+# it precisely because swapping the sulfur for selenium does not change the
+# shape -- so its side-chain heteroatom is presented to fpocket as a methionine
+# sulfur. That keeps fpocket's druggability calibration, which is defined at
+# default flags over ordinary protein atoms, on ground it was calibrated for.
+#
+# This aliasing does NOT generalise: LLP is a lysine carrying a whole pyridoxal
+# phosphate, so there is no atom-level correspondence to invent. Every other
+# modified residue keeps its real atoms and real elements -- the extra bulk is
+# genuinely there in the apo structure, and the SASA probe should see it.
+ATOM_ALIAS = {
+    "MSE": {"SE": ("SD", "S")},        # observed name -> (parent name, element)
+}
+
+
+@functools.lru_cache(maxsize=None)
+def parent_residue(name: str) -> str | None:
+    """The standard amino acid a residue stands in for, or None to exclude it.
+
+    WHY THIS EXISTS
+        `residue_records` used to keep only the literal 20 standard names, which
+        removed modified residues from the structure ENTIRELY -- not merely from
+        the prediction set. A dropped MSE leaves a methionine-shaped void, so
+        every neighbour's RSA is overestimated, its packing and neighbour counts
+        are understated, and fpocket can report a cavity where a side chain
+        should be. Measured cost before this fix: 47 of 20,387 annotated cryptic
+        residues (0.23%) never matched a record and were silently discarded --
+        `4yt8`'s match rate of 0.857 was exactly three MSE residues, A_243,
+        A_283 and B_214, all three annotated cryptic by CryptoBench.
+
+    HOW
+        gemmi's chemical-component table already knows the parent: a modified
+        amino acid carries its parent's one-letter code in LOWER case
+        (MSE -> 'm', LLP -> 'k', PCA -> 'e'), while the standard 20 are upper
+        case. So the parent falls out of the table and no hand-maintained list
+        of modifications has to be kept correct.
+
+    WHAT IS STILL EXCLUDED, DELIBERATELY
+        - DNA and RNA chains. Their atoms are left out of the surface entirely,
+          which is a modelling choice, not an oversight: the task is defined on
+          the apo protein. For a protein crystallised with its nucleic acid this
+          means the computed surface is not the one in the complex.
+        - `UNK` and anything whose parent is unknown ('X'). There is no honest
+          MAX_ASA, hydropathy or charge to give a residue of unknown identity,
+          and inventing one would be a confident false statement.
+        - Waters, ions, ligands, and non-amino-acid components that gemmi does
+          not class as amino acids at all (HS8, IL0, ASB and friends).
+    """
+    info = gemmi.find_tabulated_residue(name)
+    if info is None or not info.is_amino_acid():
+        return None
+    olc = (info.one_letter_code or " ").strip().upper()
+    return config.ONE_TO_THREE.get(olc)
+
+
 def residue_records(
     st: gemmi.Structure, chains: Sequence[str] | None = None
 ) -> List[ResidueRecord]:
-    """Standard amino-acid polymer residues of the requested chains.
+    """Amino-acid polymer residues of the requested chains.
 
-    Waters, ions, ligands and non-standard residues are excluded: they are not
-    prediction targets and would distort the surface.
+    Modified residues (MSE, SEP, PTR, ...) are KEPT, under their parent standard
+    name -- see `parent_residue` for why, and for what is still excluded. Waters,
+    ions, ligands and nucleic acids are excluded: they are not prediction targets
+    and, for the apo task, not part of the surface being described.
     """
     wanted = set(chains) if chains else None
     model = st[0]
@@ -106,19 +170,23 @@ def residue_records(
         if wanted is not None and chain.name not in wanted:
             continue
         for res in chain.get_polymer():
-            if res.name not in config.MAX_ASA:
+            parent = parent_residue(res.name)
+            if parent is None:
                 continue
+            alias = ATOM_ALIAS.get(res.name, {})
             xyz, elems, names, bs = [], [], [], []
             ca = cb = None
             for atom in res:
                 p = atom.pos
+                atom_name, element = alias.get(
+                    atom.name, (atom.name, atom.element.name.upper()))
                 xyz.append((p.x, p.y, p.z))
-                elems.append(atom.element.name.upper())
-                names.append(atom.name)
+                elems.append(element)
+                names.append(atom_name)
                 bs.append(atom.b_iso)
-                if atom.name == "CA":
+                if atom_name == "CA":
                     ca = np.array((p.x, p.y, p.z))
-                elif atom.name == "CB":
+                elif atom_name == "CB":
                     cb = np.array((p.x, p.y, p.z))
             if not xyz:
                 continue
@@ -133,7 +201,12 @@ def residue_records(
                 # positional.
                 label_seq=res.label_seq,
                 icode=(res.seqid.icode or " ").strip(),
-                resname=res.name,
+                # The PARENT standard name: every downstream lookup keys on it
+                # (MAX_ASA for RSA, hydropathy, formal charge, the one-letter
+                # sequence handed to ESM-2, and the conservation join), and none
+                # of those tables has an entry for a modified residue.
+                resname=parent,
+                resname_observed=res.name,
                 atom_xyz=np.asarray(xyz, dtype=np.float64),
                 atom_elements=elems,
                 atom_names=names,

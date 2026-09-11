@@ -3,6 +3,8 @@
 Same numbers, same palette, same slot order. Regenerate with:
     python figures/make_benchmark_figure.py
 """
+from pathlib import Path
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -31,11 +33,11 @@ SUBSETS = [
     ("holo",  "CB-P2RANK-holo", "holo input — diff. task", True),
 ]
 DATA = {
-    "full":  {"tabicl_esm":  dict(auprc=.476, auc=.882, mcc=.410, f1=.921, tpr=.591, fpr=.062),
-              "tabicl":      dict(auprc=.450, auc=.867, mcc=.389, f1=.918, tpr=.565, fpr=.064),
+    "full":  {"tabicl_esm":  dict(auprc=.441, auc=.862, mcc=.374, f1=.912, tpr=.559, fpr=.071),
+              "tabicl":      dict(auprc=.388, auc=.848, mcc=.336, f1=.906, tpr=.515, fpr=.073),
               "plmnn":       dict(auprc=.36,  auc=.86,  mcc=.39,  f1=.92,  tpr=.48,  fpr=.05)},
-    "p2apo": {"tabicl_esm":  dict(auprc=.501, auc=.885, mcc=.425, f1=.922, tpr=.602, fpr=.062),
-              "tabicl":      dict(auprc=.471, auc=.868, mcc=.405, f1=.919, tpr=.571, fpr=.063),
+    "p2apo": {"tabicl_esm":  dict(auprc=.469, auc=.861, mcc=.392, f1=.914, tpr=.569, fpr=.068),
+              "tabicl":      dict(auprc=.411, auc=.845, mcc=.350, f1=.910, tpr=.512, fpr=.068),
               "plmnn":       dict(auprc=.42,  auc=.88,  mcc=.43,  f1=.93,  tpr=.51,  fpr=.04),
               "p2rank":      dict(auprc=.21,  auc=.81,  mcc=.27,  f1=.81,  tpr=.62,  fpr=.14)},
     "pm":    {"plmnn":       dict(auprc=.43,  auc=.88,  mcc=.44,  f1=.93,  tpr=.52,  fpr=.04),
@@ -128,7 +130,7 @@ nax.text(-.02, 1.02,
          "trivially negative. Every pLM-based row lands at 0.92–0.93; the\n"
          "column separates the structure-only tools and nothing else.\n\n"
          "Our positive-class F1 — the number that carries information — is\n"
-         "0.415 (118 feat) and 0.397 (54 feat) on CB-full. It is NOT\n"
+         "0.379 (117 feat) and 0.345 (53 feat) on CB-full. It is NOT\n"
          "comparable to the published column and is deliberately not plotted\n"
          "beside it.\n\n"
          "Reproduce every value above with:\n"
@@ -142,6 +144,13 @@ fig.text(.055, .946,
          "Test split: 231 apo structures, 76,636 residues, 5.28 % positive.",
          ha="left", fontsize=8.8, color=INK2)
 
-fig.savefig("benchmark_comparison.png", dpi=200, bbox_inches="tight", pad_inches=.28)
-fig.savefig("benchmark_comparison.pdf", bbox_inches="tight", pad_inches=.28)
+# Anchored to this file, not the CWD: the README documents running these as
+# `python figures/make_benchmark_figure.py` from the repo root, and a bare
+# relative path dropped the artifacts there instead of in figures/ -- silently,
+# because the script still printed "wrote".
+_HERE = Path(__file__).resolve().parent
+fig.savefig(_HERE / "benchmark_comparison.png", dpi=200,
+            bbox_inches="tight", pad_inches=.28)
+fig.savefig(_HERE / "benchmark_comparison.pdf",
+            bbox_inches="tight", pad_inches=.28)
 print("wrote figures/benchmark_comparison.png and .pdf")

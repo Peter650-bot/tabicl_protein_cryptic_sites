@@ -226,7 +226,7 @@
   <header>
     <p class="eyebrow">CryptoBench · per-residue cryptic site prediction</p>
     <h1>Where TabICL stands against the published baselines</h1>
-    <p class="standfirst">Every method the CryptoBench paper reports, on every subset it reports them on, next to this project's two zero-shot TabICLv2 variants. Metrics are computed <strong>per structure then averaged</strong> — CryptoBench's own convention — so the columns are comparable. <strong>AUPRC leads</strong>: at 5.28&nbsp;% positives it is the only summary that reflects how hard the task actually is. Below the benchmark bars, a second view puts every model we ran — TabICL, LogisticRegression and RandomForest, across six feature sets and three negative-sampling regimes — on one ladder.</p>
+    <p class="standfirst">Every method the CryptoBench paper reports, on every subset it reports them on, next to this project's two zero-shot TabICLv2 variants. Metrics are computed <strong>per structure then averaged</strong> — CryptoBench's own convention — so the columns are comparable. <strong>AUPRC leads</strong>: at 5.28&nbsp;% positives it is the only summary that reflects how hard the task actually is. Below the benchmark bars, a second view puts every model we ran — TabICL, LogisticRegression and RandomForest, across six feature sets and two training regimes — on one ladder.</p>
   </header>
 
   <div class="legend" id="legend"></div>
@@ -245,7 +245,7 @@
 
   <section>
     <h3>The model ladder on CB-full</h3>
-    <p class="sec-note">LogisticRegression and RandomForest exist on CB-full only, so they cannot join the bars above. Here every configuration sits on its own row — <strong>same features, same negatives</strong> — with one dot per model family. The horizontal spread inside a row is the model effect alone; the vertical distance between rows is what the features did — every row is now on the same (fixed) negative sampler and the same corrected residue table, so the sampler is no longer a confound between rows.</p>
+    <p class="sec-note">LogisticRegression and RandomForest exist on CB-full only, so they cannot join the bars above. Here every configuration sits on its own row — <strong>same features, same negatives</strong> — with one dot per model family. The horizontal spread inside a row is the model effect alone (0.027&ndash;0.061 AUPRC, and TabICL leads every one of the six conditions); the vertical distance between rows is what the features did (0.343 &rarr; 0.441) — every row is now on the same (fixed) negative sampler and the same corrected residue table, so the sampler is no longer a confound between rows.</p>
     <div class="legend" id="ladder-legend"></div>
     <figure class="panel" style="margin-top:18px">
       <div class="plot-scroll"><svg id="ladder-svg"></svg></div>
@@ -288,13 +288,13 @@
   // value = null  →  method not evaluated on that subset
   var DATA = {
     full: {
-      tabicl_esm:  { auprc: 0.476, auc: 0.882, mcc: 0.410, f1: 0.921, tpr: 0.591, fpr: 0.062 },
-      tabicl:      { auprc: 0.450, auc: 0.867, mcc: 0.389, f1: 0.918, tpr: 0.565, fpr: 0.064 },
+      tabicl_esm:  { auprc: 0.441, auc: 0.862, mcc: 0.374, f1: 0.912, tpr: 0.559, fpr: 0.071 },
+      tabicl:      { auprc: 0.388, auc: 0.848, mcc: 0.336, f1: 0.906, tpr: 0.515, fpr: 0.073 },
       plmnn:       { auprc: 0.36,  auc: 0.86,  mcc: 0.39,  f1: 0.92,  tpr: 0.48,  fpr: 0.05  }
     },
     p2apo: {
-      tabicl_esm:  { auprc: 0.501, auc: 0.885, mcc: 0.425, f1: 0.922, tpr: 0.602, fpr: 0.062 },
-      tabicl:      { auprc: 0.471, auc: 0.868, mcc: 0.405, f1: 0.919, tpr: 0.571, fpr: 0.063 },
+      tabicl_esm:  { auprc: 0.469, auc: 0.861, mcc: 0.392, f1: 0.914, tpr: 0.569, fpr: 0.068 },
+      tabicl:      { auprc: 0.411, auc: 0.845, mcc: 0.350, f1: 0.910, tpr: 0.512, fpr: 0.068 },
       plmnn:       { auprc: 0.42,  auc: 0.88,  mcc: 0.43,  f1: 0.93,  tpr: 0.51,  fpr: 0.04  },
       p2rank:      { auprc: 0.21,  auc: 0.81,  mcc: 0.27,  f1: 0.81,  tpr: 0.62,  fpr: 0.14  }
     },
@@ -543,18 +543,18 @@
   tbl.appendChild(tbody);
 
   var LADDER = [
-    { feat: 118, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.4721, auc: 0.8748, mcc: 0.39311, tpr: 0.50279, fpr: 0.04431 }, rf: { auprc: 0.44565, auc: 0.86139, mcc: 0.35379, tpr: 0.73153, fpr: 0.15852 }, tabicl: { auprc: 0.4758, auc: 0.88204, mcc: 0.40958, tpr: 0.59068, fpr: 0.06211 } } },
-    { feat: 118, regime: "full 304k train", models: { lr: { auprc: 0.46981, auc: 0.87487, mcc: 0.40624, tpr: 0.52592, fpr: 0.05407 }, rf: { auprc: 0.44848, auc: 0.86253, mcc: 0.2321, tpr: 0.19293, fpr: 0.00877 } } },
-    { feat: 86, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.46895, auc: 0.87164, mcc: 0.38811, tpr: 0.49746, fpr: 0.04394 }, rf: { auprc: 0.44388, auc: 0.86139, mcc: 0.35528, tpr: 0.71745, fpr: 0.15067 }, tabicl: { auprc: 0.4717, auc: 0.87981, mcc: 0.4075, tpr: 0.59446, fpr: 0.06424 } } },
-    { feat: 86, regime: "full 304k train", models: { lr: { auprc: 0.46802, auc: 0.87167, mcc: 0.3995, tpr: 0.51941, fpr: 0.05215 }, rf: { auprc: 0.45058, auc: 0.8597, mcc: 0.25088, tpr: 0.22051, fpr: 0.01057 } } },
-    { feat: 70, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.45483, auc: 0.86393, mcc: 0.37574, tpr: 0.47086, fpr: 0.04163 }, rf: { auprc: 0.44284, auc: 0.85922, mcc: 0.35449, tpr: 0.69995, fpr: 0.14168 }, tabicl: { auprc: 0.4643, auc: 0.87416, mcc: 0.39872, tpr: 0.5764, fpr: 0.06391 } } },
-    { feat: 70, regime: "full 304k train", models: { lr: { auprc: 0.45174, auc: 0.86307, mcc: 0.38506, tpr: 0.48803, fpr: 0.04941 }, rf: { auprc: 0.44249, auc: 0.85733, mcc: 0.26595, tpr: 0.23395, fpr: 0.01121 } } },
-    { feat: 54, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.43902, auc: 0.85409, mcc: 0.36084, tpr: 0.45471, fpr: 0.04154 }, rf: { auprc: 0.43183, auc: 0.85507, mcc: 0.34965, tpr: 0.68226, fpr: 0.13732 }, tabicl: { auprc: 0.44992, auc: 0.86742, mcc: 0.38929, tpr: 0.56483, fpr: 0.06428 } } },
-    { feat: 54, regime: "full 304k train", models: { lr: { auprc: 0.43701, auc: 0.85355, mcc: 0.37277, tpr: 0.47687, fpr: 0.05116 }, rf: { auprc: 0.43379, auc: 0.85257, mcc: 0.27751, tpr: 0.25724, fpr: 0.01414 } } },
-    { feat: 48, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.42252, auc: 0.84717, mcc: 0.33927, tpr: 0.44271, fpr: 0.04282 }, rf: { auprc: 0.40099, auc: 0.84583, mcc: 0.32595, tpr: 0.66172, fpr: 0.1391 }, tabicl: { auprc: 0.42967, auc: 0.86189, mcc: 0.36559, tpr: 0.54283, fpr: 0.06546 } } },
-    { feat: 48, regime: "full 304k train", models: { lr: { auprc: 0.41833, auc: 0.84689, mcc: 0.34193, tpr: 0.45083, fpr: 0.04959 }, rf: { auprc: 0.39844, auc: 0.83851, mcc: 0.25698, tpr: 0.24865, fpr: 0.01368 } } },
-    { feat: 34, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.41422, auc: 0.8346, mcc: 0.33498, tpr: 0.44303, fpr: 0.04392 }, rf: { auprc: 0.41705, auc: 0.8413, mcc: 0.3285, tpr: 0.63775, fpr: 0.12635 }, tabicl: { auprc: 0.43339, auc: 0.85561, mcc: 0.36863, tpr: 0.54294, fpr: 0.06318 } } },
-    { feat: 34, regime: "full 304k train", models: { lr: { auprc: 0.41268, auc: 0.83389, mcc: 0.34747, tpr: 0.45582, fpr: 0.05038 }, rf: { auprc: 0.41524, auc: 0.83839, mcc: 0.25671, tpr: 0.25681, fpr: 0.01533 } } }
+    { feat: 117, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.41741, auc: 0.85649, mcc: 0.3388, tpr: 0.42451, fpr: 0.04395 }, rf: { auprc: 0.37989, auc: 0.83841, mcc: 0.31461, tpr: 0.67609, fpr: 0.16377 }, tabicl: { auprc: 0.44131, auc: 0.86184, mcc: 0.37396, tpr: 0.55931, fpr: 0.07069 } } },
+    { feat: 117, regime: "full 304k train", models: { lr: { auprc: 0.41593, auc: 0.85562, mcc: 0.34348, tpr: 0.4121, fpr: 0.04609 }, rf: { auprc: 0.38137, auc: 0.83729, mcc: 0.33724, tpr: 0.56361, fpr: 0.10382 } } },
+    { feat: 85, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.41047, auc: 0.85345, mcc: 0.32745, tpr: 0.4116, fpr: 0.0439 }, rf: { auprc: 0.38099, auc: 0.83714, mcc: 0.3197, tpr: 0.66923, fpr: 0.15559 }, tabicl: { auprc: 0.43413, auc: 0.85793, mcc: 0.3653, tpr: 0.55671, fpr: 0.07218 } } },
+    { feat: 85, regime: "full 304k train", models: { lr: { auprc: 0.41004, auc: 0.85187, mcc: 0.33313, tpr: 0.39718, fpr: 0.04401 }, rf: { auprc: 0.38175, auc: 0.83563, mcc: 0.33657, tpr: 0.55805, fpr: 0.1007 } } },
+    { feat: 69, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.38837, auc: 0.84219, mcc: 0.31176, tpr: 0.38911, fpr: 0.04286 }, rf: { auprc: 0.37459, auc: 0.83343, mcc: 0.31697, tpr: 0.65457, fpr: 0.14919 }, tabicl: { auprc: 0.41116, auc: 0.85051, mcc: 0.34953, tpr: 0.52645, fpr: 0.07006 } } },
+    { feat: 69, regime: "full 304k train", models: { lr: { auprc: 0.38732, auc: 0.84003, mcc: 0.30517, tpr: 0.35965, fpr: 0.04351 }, rf: { auprc: 0.37099, auc: 0.82961, mcc: 0.32735, tpr: 0.53418, fpr: 0.09646 } } },
+    { feat: 53, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.36175, auc: 0.8313, mcc: 0.28439, tpr: 0.3584, fpr: 0.04381 }, rf: { auprc: 0.35754, auc: 0.82928, mcc: 0.30873, tpr: 0.63583, fpr: 0.14774 }, tabicl: { auprc: 0.388, auc: 0.84808, mcc: 0.33641, tpr: 0.51525, fpr: 0.07346 } } },
+    { feat: 53, regime: "full 304k train", models: { lr: { auprc: 0.35826, auc: 0.82946, mcc: 0.2766, tpr: 0.33521, fpr: 0.04649 }, rf: { auprc: 0.34649, auc: 0.82435, mcc: 0.30546, tpr: 0.50804, fpr: 0.09749 } } },
+    { feat: 47, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.32897, auc: 0.82189, mcc: 0.24081, tpr: 0.3244, fpr: 0.04624 }, rf: { auprc: 0.32446, auc: 0.8209, mcc: 0.27982, tpr: 0.61153, fpr: 0.15007 }, tabicl: { auprc: 0.3516, auc: 0.8387, mcc: 0.3106, tpr: 0.48966, fpr: 0.07647 } } },
+    { feat: 47, regime: "full 304k train", models: { lr: { auprc: 0.32653, auc: 0.82077, mcc: 0.2312, tpr: 0.29447, fpr: 0.04542 }, rf: { auprc: 0.31081, auc: 0.81357, mcc: 0.28111, tpr: 0.491, fpr: 0.10141 } } },
+    { feat: 33, regime: "50k context, fixed sampler", models: { lr: { auprc: 0.29739, auc: 0.79864, mcc: 0.22565, tpr: 0.30016, fpr: 0.04518 }, rf: { auprc: 0.31254, auc: 0.80903, mcc: 0.25732, tpr: 0.59096, fpr: 0.16116 }, tabicl: { auprc: 0.34265, auc: 0.82603, mcc: 0.28616, tpr: 0.47723, fpr: 0.08255 } } },
+    { feat: 33, regime: "full 304k train", models: { lr: { auprc: 0.29818, auc: 0.79825, mcc: 0.22842, tpr: 0.28832, fpr: 0.0452 }, rf: { auprc: 0.31345, auc: 0.80471, mcc: 0.27519, tpr: 0.49386, fpr: 0.1057 } } }
   ];
 
   var FAMS = [
@@ -563,9 +563,9 @@
     { id: "rf",     slot: 3, name: "RandomForest" }
   ];
   var LCOLS = [
-    { key: "auprc", label: "AUPRC", lo: 0.385, hi: 0.487, ticks: [.40, .42, .44, .46], ref: 0.36 },
-    { key: "auc",   label: "AUC",   lo: 0.826, hi: 0.890, ticks: [.84, .85, .86, .87, .88], ref: 0.86 },
-    { key: "mcc",   label: "MCC",   lo: 0.215, hi: 0.425, ticks: [.25, .30, .35, .40], ref: 0.39 }
+    { key: "auprc", label: "AUPRC", lo: 0.285, hi: 0.455, ticks: [.30, .34, .38, .42], ref: 0.36 },
+    { key: "auc",   label: "AUC",   lo: 0.792, hi: 0.870, ticks: [.80, .82, .84, .86], ref: 0.86 },
+    { key: "mcc",   label: "MCC",   lo: 0.215, hi: 0.388, ticks: [.24, .28, .32, .36], ref: 0.39 }
   ];
   var LMETRICS = [["auprc", "AUPRC"], ["auc", "AUC"], ["mcc", "MCC"], ["tpr", "TPR"], ["fpr", "FPR"]];
 
@@ -714,12 +714,12 @@
   var NOTES = [
     ["CB-PM", "Neither TabICL row appears on CB-PM, and that gap cannot be closed from the shipped data. The subset is defined by which 60 structures PocketMiner failed to run on — a property of that tool's run, not of the dataset. Reconstructing it means asking the CryptoBench authors for the structure list."],
     ["CB-P2RANK-holo", "Shaded because it is a different task, not a harder split. P2Rank sees the ligand-bound (holo) structure, where the pocket is already open. It is included for completeness and must not be read as a fifth column of apo results."],
-    ["The F1 column", "The paper computes F1 \u201cusing a weighted average\u201d over both classes, which is why pLM-NN\u2019s published F1 (0.92) tracks its ACC (0.93) rather than its TPR (0.48). Ours is computed identically \u2014 per structure, weighted, then averaged \u2014 so the bars are directly comparable. Our positive-class F1, the number that actually carries information, is 0.415 (118 feat) and 0.397 (54 feat) on CB-full; it is not comparable to this column and is deliberately not plotted beside it. Reproduce with scripts/f1_by_subset.py."],
+    ["The F1 column", "The paper computes F1 \u201cusing a weighted average\u201d over both classes, which is why pLM-NN\u2019s published F1 (0.92) tracks its ACC (0.93) rather than its TPR (0.48). Ours is computed identically \u2014 per structure, weighted, then averaged \u2014 so the bars are directly comparable. Our positive-class F1, the number that actually carries information, is 0.379 (117 feat) and 0.345 (53 feat) on CB-full; it is not comparable to this column and is deliberately not plotted beside it. Reproduce with scripts/f1_by_subset.py."],
     ["Thresholds", "Not a benchmark constant. pLM-NN used 0.95, PocketMiner 0.7, P2Rank emits binary calls with no threshold at all, and ours was selected on training folds targeting FPR 0.05. TPR, FPR and MCC therefore compare operating points each method chose for itself; AUC and AUPRC are threshold-free and compare rankings."],
-    ["Comparability", "All rows are per-structure-then-averaged on CryptoBench's own test split — 231 apo structures, 76,636 residues, 5.28 % positive — matching the paper's Protein.py. CB-P2RANK-apo is the cleanest of the two apo columns for us: on that subset our evaluation unit and pLM-NN's are identical by construction."],
+    ["Comparability", "All rows are per-structure-then-averaged on CryptoBench's own test split — 231 apo structures, 76,753 residues, 5.28 % positive — matching the paper's Protein.py. CB-P2RANK-apo is the cleanest of the two apo columns for us: on that subset our evaluation unit and pLM-NN's are identical by construction."],
     ["Why LR and RF are not in the bars", "Our sklearn controls were evaluated on CB-full only, and the stored artifacts keep summary metrics rather than per-residue scores, so they cannot be re-scored on CB-P2RANK-apo. Adding them to the subset bars would have meant two more colour channels standing empty on three of four subsets. The dot strip is the honest form for them. Every row here is on the fixed sampler; the old-sampler runs that RESULTS.md \u00a7 3 keeps as the sampler bug\u2019s evidence were overwritten when those configurations were re-measured, so they have no stored artifact and are absent from this figure."],
-    ["TabICL has no full-304k row", "Not an omission \u2014 304k labelled rows do not fit in an in-context window, so the full-304k rows are the sklearn models\u2019 best case. TabICL still leads them from 50k of context: LogisticRegression on all 304k reaches AUPRC 0.470 against TabICL\u2019s in-context 0.476. The lead is real and consistent, and small \u2014 ~0.005\u20130.010 AUC at every feature count \u2014 next to what the features do, which is why the features rather than the model carry this result."],
-    ["What is not shown", "Both TabICL rows are zero-shot: no gradient step is taken on CryptoBench, and the ESM features are frozen embeddings rather than a fine-tuned network. The 54-feature row uses no protein language model at all, which makes it the stronger claim even though the 118-feature row is the better predictor."]
+    ["TabICL has no full-304k row", "Not an omission \u2014 304k labelled rows do not fit in an in-context window, so the full-304k rows are the sklearn models\u2019 best case. TabICL still leads them from 50k of context: LogisticRegression on all 304k reaches AUPRC 0.416 against TabICL\u2019s in-context 0.441. The lead is real and consistent \u2014 TabICL leads every one of the six conditions \u2014 but at 0.027\u20130.061 AUPRC it is still smaller than what the features do (0.343 \u2192 0.441), which is why the features rather than the model carry this result."],
+    ["What is not shown", "Both TabICL rows are zero-shot: no gradient step is taken on CryptoBench, and the ESM features are frozen embeddings rather than a fine-tuned network. The 53-feature row uses no protein language model at all, but it no longer clears the benchmark: its AUPRC 0.388 [0.356, 0.420] contains pLM-NN\u2019s 0.36, so it is a tie rather than a win. Only the 117-feature row beats pLM-NN, and only on AUPRC and TPR."]
   ];
   var nh = document.getElementById("notes");
   NOTES.forEach(function (n, i) {

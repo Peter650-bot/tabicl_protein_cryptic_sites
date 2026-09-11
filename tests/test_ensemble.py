@@ -153,3 +153,56 @@ def test_pdb_columns_are_well_formed():
     assert float(line[30:38]) == pytest.approx(1.234)
     assert float(line[38:46]) == pytest.approx(5.678)
     assert float(line[46:54]) == pytest.approx(9.012)
+
+
+# --------------------------------------------- the no-modes fallback path
+def _records(n):
+    """`n` synthetic residues along a helix, three atoms each."""
+    from cryptic_tabicl.structures import ResidueRecord
+
+    ca = _helix(n=n)
+    out = []
+    for i, c in enumerate(ca):
+        xyz = np.stack([c, c + (1.0, 0.0, 0.0), c + (0.0, 1.0, 0.0)])
+        out.append(ResidueRecord(
+            chain="A", seq_id=i + 1, label_seq=i + 1, icode="", resname="ALA",
+            atom_xyz=xyz, atom_elements=["N", "C", "C"],
+            atom_names=["N", "CA", "C"], bfactors=np.full(3, 20.0),
+            ca_xyz=np.asarray(c), cb_xyz=None))
+    return out
+
+
+@pytest.fixture()
+def _no_fpocket(monkeypatch):
+    """fpocket is a container-side binary; the parser is tested separately."""
+    from cryptic_tabicl import ensemble_features as ef
+    monkeypatch.setattr(ef.fpocket, "run_fpocket", lambda *a, **k: [])
+    return ef
+
+
+def test_fallback_path_still_gets_its_neighbourhood_columns(_no_fpocket):
+    """A protein too small for an ANM must not lose half its ensemble columns.
+
+    The fallback used to `return _rows(...)` directly, skipping
+    `_add_neighbourhood`, so those proteins came out missing all seven `_nb8`
+    columns. `validate` only rejects columns that are ENTIRELY NaN, so after the
+    merge a partially-NaN column would have passed unnoticed.
+    """
+    ef = _no_fpocket
+    small = _records(8)                       # below the 20-Ca ANM minimum
+    assert anm.compute_modes(_helix(n=8)) is None, "fixture must take the fallback"
+
+    rows = ef.compute_ensemble_features(small, n_conformations=4)
+    assert len(rows) == len(small)
+    expected = set(ef.FEATURE_NAMES) | {f"{f}_nb8" for f in ef.FEATURE_NAMES}
+    for row in rows:
+        assert set(row) == expected, f"missing {sorted(expected - set(row))}"
+
+
+def test_fallback_and_normal_paths_agree_on_column_set(_no_fpocket):
+    """Whatever the path, the merge downstream must see the same 14 columns."""
+    ef = _no_fpocket
+    small = ef.compute_ensemble_features(_records(8), n_conformations=4)
+    large = ef.compute_ensemble_features(_records(40), n_conformations=4)
+    assert set(small[0]) == set(large[0])
+    assert len(set(large[0])) == 2 * len(ef.FEATURE_NAMES)

@@ -130,15 +130,74 @@ def test_sampling_is_deterministic():
 
 
 # ---------------------------------------------------------------- evaluation
+def _scored(n=5000, n_proteins=25, seed=0):
+    """Labels, scores and protein ids with DELIBERATELY uneven protein sizes."""
+    rng = np.random.default_rng(seed)
+    y = (rng.random(n) < 0.05).astype(int)
+    s = np.clip(y * 0.5 + rng.normal(0.3, 0.2, n), 0, 1)
+    # Sizes spanning 20x, so pooled and per-protein FPR genuinely differ.
+    sizes = np.linspace(1, 20, n_proteins)
+    sizes = np.maximum(1, (sizes / sizes.sum() * n).astype(int))
+    sizes[-1] += n - sizes.sum()
+    g = np.repeat([f"p{i}" for i in range(n_proteins)], sizes)
+    return y, s, g
+
+
 def test_threshold_selection_respects_target_fpr():
     from cryptic_tabicl import evaluate
 
-    rng = np.random.default_rng(0)
-    y = (rng.random(5000) < 0.05).astype(int)
-    s = np.clip(y * 0.5 + rng.normal(0.3, 0.2, 5000), 0, 1)
-    thr = evaluate.choose_threshold(y, s, target_fpr=0.05)
-    achieved = ((s >= thr) & (y == 0)).sum() / (y == 0).sum()
-    assert achieved <= 0.05 + 1e-9
+    y, s, g = _scored()
+    thr = evaluate.choose_threshold(y, s, g, target_fpr=0.05)
+    assert evaluate.mean_per_protein_fpr(y, s, g, thr) <= 0.05 + 1e-12
+
+
+def test_threshold_targets_the_reported_statistic_not_the_pooled_one():
+    """CryptoBench reports the mean of per-protein FPRs, so that is what the
+    sweep must constrain.
+
+    `pocketminer_stats.py` writes its "average" row as `sum(avg_fpr) / counter`
+    over per-protein `Protein.get_FPR()` values. The old implementation called
+    `sklearn.roc_curve`, which pools every residue of every protein into one
+    bucket -- a different quantity, dominated by the largest proteins.
+    """
+    from cryptic_tabicl import evaluate
+
+    y, s, g = _scored()
+    thr = evaluate.choose_threshold(y, s, g, target_fpr=0.05)
+
+    per_protein = evaluate.mean_per_protein_fpr(y, s, g, thr)
+    pooled = ((s >= thr) & (y == 0)).sum() / (y == 0).sum()
+
+    assert per_protein <= 0.05 + 1e-12, "the reported statistic must be in budget"
+    # The two are genuinely different quantities on uneven protein sizes; if they
+    # ever coincide this test has stopped testing anything.
+    assert abs(per_protein - pooled) > 1e-6, (
+        "fixture no longer distinguishes pooled from per-protein FPR")
+
+
+def test_threshold_is_the_lowest_one_that_fits():
+    """Lowest, so TPR is maximal subject to the FPR budget."""
+    from cryptic_tabicl import evaluate
+
+    y, s, g = _scored()
+    for target in (0.01, 0.05, 0.20):
+        thr = evaluate.choose_threshold(y, s, g, target_fpr=target)
+        assert evaluate.mean_per_protein_fpr(y, s, g, thr) <= target + 1e-12
+        lower = np.unique(s[(y == 0) & (s < thr)])
+        if len(lower):
+            worse = evaluate.mean_per_protein_fpr(y, s, g, lower[-1])
+            assert worse > target, (
+                f"a lower threshold {lower[-1]} also fits at target {target}")
+
+
+def test_mean_per_protein_fpr_matches_a_direct_recomputation():
+    from cryptic_tabicl import evaluate
+
+    y, s, g = _scored()
+    thr = 0.5
+    direct = pd.DataFrame({"y": y, "p": (s >= thr).astype(int), "g": g})
+    expected = (direct[direct.y == 0].groupby("g")["p"].mean()).mean()
+    assert evaluate.mean_per_protein_fpr(y, s, g, thr) == pytest.approx(expected)
 
 
 def test_perfect_scores_give_auc_one():

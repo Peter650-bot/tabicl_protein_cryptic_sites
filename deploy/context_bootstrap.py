@@ -37,6 +37,31 @@ WHAT THIS DOES AND DOES NOT ANSWER
 
 USAGE
     modal run deploy/context_bootstrap.py --seeds 12
+
+    On a flaky connection, prefer the fire-and-forget path. `.map()` below needs
+    one gRPC stream to stay up for the whole run, and a drop cancels every job
+    still in flight (they only reach the volume on completion). `--detach` does
+    NOT cover a fan-out -- it keeps the last triggered function alive, not 60 of
+    them. Instead deploy once and spawn, so the client only makes one short RPC
+    per job:
+
+        modal deploy deploy/context_bootstrap.py
+        python - <<'EOF'
+        import modal, pandas as pd
+        RUN = "my_run_id"
+        tb = pd.read_parquet(TABLE_LOCAL, columns=["split", "fold"])
+        folds = sorted(tb.loc[tb.split == "train", "fold"].dropna().unique())
+        f = modal.Function.from_name("cryptobench-context-bootstrap", "score_one")
+        for s in range(12):
+            for h in list(folds) + [None]:
+                f.spawn({"seed": s, "held": h, "budget": 50_000,
+                         "n_estimators": 8, "n_components": 64, "run_id": RUN})
+        EOF
+
+    Then wait for 5 x seeds files to appear in the volume and aggregate for free:
+
+        modal volume ls cryptobench-bootstrap-results <run_id>
+        modal run deploy/context_bootstrap.py --collect --run-id <run_id> --seeds 12
 """
 from __future__ import annotations
 
@@ -71,12 +96,46 @@ image = (
 
 app = modal.App("cryptobench-context-bootstrap")
 
+# Each job's scores are ALSO written here, keyed by (run_id, seed, fold).
+#
+# WHY: aggregation happens in the local entrypoint, so a client-side gRPC drop
+# throws away every GPU-second already spent. This is a 60-job run and it has
+# died that way on this host -- `AttributeError: 'Connection' object has no
+# attribute '_transport'` at job 10 of 60. Persisting each job makes the GPU
+# work durable; `--collect` replays the aggregation from the volume for free.
+# Same pattern as deploy/tabicl_fanout.py.
+results_vol = modal.Volume.from_name("cryptobench-bootstrap-results",
+                                     create_if_missing=True)
 
-@app.function(image=image, gpu=GPU, timeout=5400, max_containers=20, retries=1)
+
+@app.function(image=image, gpu=GPU, timeout=5400, max_containers=20, retries=1,
+              volumes={"/results": results_vol})
 def score_one(job: dict) -> dict:
     """One (seed, fold) job. Returns raw scores; thresholding happens client-side."""
     sys.path.insert(0, "/app")
     import time
+
+    _TAG = f"s{job['seed']}_{job['held'] or 'final'}"
+    # ---- resume: a job already in the volume is not recomputed ------------
+    # This is what makes the run pausable. Stop the app at any point, re-run
+    # later with the SAME --run-id, and only the missing jobs cost GPU time.
+    # The guard is the file's existence, so it is safe to re-enter repeatedly.
+    import json as _json
+    import os as _os
+    _run_dir = f"/results/{job['run_id']}"
+    _cached = f"{_run_dir}/{_TAG}.json"
+    try:
+        results_vol.reload()
+    except Exception:  # noqa: BLE001 - a reload failure must not lose the job
+        pass
+    if _os.path.exists(_cached):
+        with open(_cached) as _fh:
+            _prev = _json.load(_fh)
+        print(f"{_TAG}: cached, skipping ({_prev['seconds']:.0f}s originally)",
+              flush=True)
+        return _prev
+
+
 
     import pandas as pd
     from cryptic_tabicl import config as C, model, sampling
@@ -105,7 +164,7 @@ def score_one(job: dict) -> dict:
     print(f"seed={seed} held={held}: scored {len(target):,} rows in "
           f"{time.time()-t0:.0f}s", flush=True)
 
-    return {
+    out = {
         "seed": seed, "held": held, "n_features": n_feat,
         "seconds": time.time() - t0,
         "n_positive": plan.n_positive, "n_negative": plan.n_negative,
@@ -115,10 +174,33 @@ def score_one(job: dict) -> dict:
         "in_noncryptic_pocket": target["in_noncryptic_pocket"].astype(int).tolist(),
     }
 
+    # Persist before returning, so the GPU-seconds survive a client disconnect.
+    import json
+    import os
+    # Same path the resume check reads, derived from the same _TAG so the two
+    # cannot drift apart.
+    os.makedirs(_run_dir, exist_ok=True)
+    with open(_cached, "w") as fh:
+        json.dump(out, fh)
+    results_vol.commit()
+    return out
+
+
+@app.function(image=image, timeout=1800, volumes={"/results": results_vol})
+def fetch_results(run_id: str) -> list:
+    """Read back one run's stored job results. Used by `--collect`."""
+    import glob
+    import json
+
+    results_vol.reload()
+    files = sorted(glob.glob(f"/results/{run_id}/*.json"))
+    print(f"reading {len(files)} stored job results from {run_id}", flush=True)
+    return [json.load(open(f)) for f in files]
+
 
 @app.local_entrypoint()
 def main(seeds: int = 12, budget: int = 50_000, n_estimators: int = 8,
-         n_components: int = 64):
+         n_components: int = 64, run_id: str = "", collect: bool = False):
     import json
     import time
 
@@ -132,19 +214,36 @@ def main(seeds: int = 12, budget: int = 50_000, n_estimators: int = 8,
     table = pd.read_parquet(TABLE_LOCAL, columns=["split", "fold"])
     folds = sorted(table.loc[table["split"] == "train", "fold"].dropna().unique())
 
+    run_id = run_id or time.strftime("run_%Y%m%d_%H%M%S")
     jobs = [{"seed": s, "held": h, "budget": budget, "n_estimators": n_estimators,
-             "n_components": n_components}
+             "n_components": n_components, "run_id": run_id}
             for s in range(seeds) for h in list(folds) + [None]]
-    print(f"{len(jobs)} jobs ({seeds} seeds x {len(folds)+1} runs) "
-          f"across up to 20 {GPU} containers")
 
     t0 = time.time()
-    results, gpu_seconds = [], 0.0
-    for r in score_one.map(jobs):
-        results.append(r)
-        gpu_seconds += r["seconds"]
-        print(f"  done seed={r['seed']} held={r['held']} "
-              f"({len(results)}/{len(jobs)})", flush=True)
+    if collect:
+        # Re-aggregate a run whose client died. Costs nothing: no GPU is used.
+        print(f"collecting stored results for {run_id}")
+        results = fetch_results.remote(run_id)
+        gpu_seconds = sum(r["seconds"] for r in results)
+        missing = {(s, h) for s in range(seeds) for h in list(folds) + [None]} - {
+            (r["seed"], r["held"]) for r in results}
+        if missing:
+            raise SystemExit(
+                f"{len(missing)} of {len(jobs)} jobs are missing from the "
+                f"volume, e.g. {sorted(missing, key=str)[:3]}. Re-run without "
+                "--collect.")
+    else:
+        print(f"{len(jobs)} jobs ({seeds} seeds x {len(folds)+1} runs) "
+              f"across up to 20 {GPU} containers  [run_id={run_id}]")
+        print("if the client disconnects, re-aggregate for free with:\n"
+              f"    modal run deploy/context_bootstrap.py --collect "
+              f"--run-id {run_id} --seeds {seeds}", flush=True)
+        results, gpu_seconds = [], 0.0
+        for r in score_one.map(jobs):
+            results.append(r)
+            gpu_seconds += r["seconds"]
+            print(f"  done seed={r['seed']} held={r['held']} "
+                  f"({len(results)}/{len(jobs)})", flush=True)
 
     wall = time.time() - t0
     print(f"\nall jobs finished in {wall:.0f}s wall / {gpu_seconds/3600:.2f} GPU-h "
@@ -155,7 +254,8 @@ def main(seeds: int = 12, budget: int = 50_000, n_estimators: int = 8,
         cv = [r for r in results if r["seed"] == s and r["held"] is not None]
         fin = next(r for r in results if r["seed"] == s and r["held"] is None)
 
-        thresholds = [evaluate.choose_threshold(np.array(r["y"]), np.array(r["score"]))
+        thresholds = [evaluate.choose_threshold(np.array(r["y"]), np.array(r["score"]),
+                                                np.array(r["apo_id"]))
                       for r in sorted(cv, key=lambda r: str(r["held"]))]
         threshold = float(np.median(thresholds))
 

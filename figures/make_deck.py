@@ -131,7 +131,7 @@ line = s.shapes.add_shape(1, Inches(1.1), Inches(4.15), Inches(2.2), Pt(4))
 line.fill.solid(); line.fill.fore_color.rgb = ORANGE
 line.line.fill.background(); line.shadow.inherit = False
 tf = textbox(s, 1.1, 4.55, 11.1, 1.4)
-para(tf, "Zero-shot TabICLv2  ·  118 apo-only features  ·  CryptoBench",
+para(tf, "Zero-shot TabICLv2  ·  117 apo-only features  ·  CryptoBench",
      size=20, color=BLUE, bold=True, first=True, space_after=10)
 para(tf, "No training. No fine-tuning. No holo structure at prediction time.",
      size=16, color=MUTED)
@@ -157,7 +157,7 @@ bullets(s, [
     ("2.  A protein is the unit. All of its residues stay together.", INK, True),
     ("     Residues within one structure are correlated; splitting inside a protein leaks.", MUTED, False),
     ("3.  Score per structure, then average the scores.", INK, True),
-    ("     Not pooled over all 76,636 residues — that would let big proteins dominate. "
+    ("     Not pooled over all 76,753 residues — that would let big proteins dominate. "
      "This is CryptoBench's own Protein.py convention.", MUTED, False),
     ("4.  Nothing derived from the holo structure may become a feature.", INK, True),
     ("     A cryptic site is DEFINED by the apo→holo change, so any holo-derived column "
@@ -174,7 +174,7 @@ note(s, "Steps run once, offline, and are cached: the ensemble and ESM stages ar
         "(Modal GPU/CPU); Tier A and conservation are cheap.", top=6.55)
 
 # ============================================================ 6. features
-s = new("118 features", "Four independent sources of evidence about one residue.")
+s = new("117 features", "Four independent sources of evidence about one residue.")
 picture(s, "04_features", top=1.72, width=8.6)
 table(s, [
     ["source", "n", "what it measures", "how it is extracted"],
@@ -187,7 +187,7 @@ table(s, [
     ["ESM-2", "64", "what does a language model make of the sequence?",
      "esm2_t36_3B → 2560-d → PCA to 64, fit on train only"],
 ], x=0.62, y=4.45, w=12.1, col_w=[2.5, 0.6, 4.2, 4.8], size=12.5, row_h=0.38)
-note(s, "Every one of the 118 is computable from the apo structure alone. That invariant is what "
+note(s, "Every one of the 117 is computable from the apo structure alone. That invariant is what "
         "makes the result honest, and a test enforces it.", top=6.88, color=RED, bold=True, size=12.5)
 
 # ============================================================ 7. Tier A
@@ -251,7 +251,7 @@ bullets(s, [
      "residues are numbered 52A and 52B. The residue key now carries the insertion code everywhere, "
      "and all three feature merges join on that four-part key under a 1:1 assertion.", MUTED, False),
 ], y=1.80, size=16, gap=13)
-note(s, "Gains shrink but do not stop: 16 → 32 components adds +0.008 AUPRC, 32 → 64 adds +0.004 — the last step sits at the context-draw noise floor.",
+note(s, "Gains shrink but do not stop: 16 → 32 components adds +0.023 AUPRC, 32 → 64 adds +0.007 — the last step is the smallest.",
      top=6.45)
 
 # ============================================================ 11. TabICL
@@ -261,18 +261,18 @@ picture(s, "06_tabicl", top=1.80, width=12.0)
 # ============================================================ 12. results
 s = new("Results", "Against the published CryptoBench benchmark, on the same test split.")
 picture(s, "07_results", top=1.78, width=10.6)
-note(s, "The 54-feature row is the stronger claim — it beats pLM-NN using no language model at all. "
-        "The 118-feature row is the better predictor. Neither supersedes the other.",
+note(s, "Only the ESM row clears pLM-NN, and only on AUPRC and TPR. At 53 features AUPRC 0.388 "
+        "[0.356, 0.420] contains their 0.36 — a tie. AUC and MCC are ties even with ESM.",
      top=6.60, color=INK)
 
 # ============================================================ 13. other models
 s = new("The other methods on CryptoBench", "Only CB-full is a like-for-like comparison with us.")
 table(s, [
     ["Method", "Subset", "AUC", "AUPRC", "TPR", "FPR", "MCC", "F1 (wtd)"],
-    ["TabICLv2 + ESM  (this work)", "CB-full", "0.882", "0.476", "0.591", "0.062", "0.410", "0.921"],
-    ["TabICLv2, no pLM  (this work)", "CB-full", "0.867", "0.450", "0.565", "0.064", "0.389", "0.918"],
+    ["TabICLv2 + ESM  (this work)", "CB-full", "0.862", "0.441", "0.559", "0.071", "0.374", "0.912"],
+    ["TabICLv2, no pLM  (this work)", "CB-full", "0.848", "0.388", "0.515", "0.073", "0.336", "0.906"],
     ["pLM-NN  (benchmark)", "CB-full", "0.86", "0.36", "0.48", "0.05", "0.39", "0.92"],
-    ["TabICLv2 + ESM  (this work)", "CB-P2RANK-apo", "0.885", "0.501", "0.602", "0.062", "0.425", "0.922"],
+    ["TabICLv2 + ESM  (this work)", "CB-P2RANK-apo", "0.861", "0.469", "0.569", "0.068", "0.392", "0.914"],
     ["pLM-NN", "CB-P2RANK-apo", "0.88", "0.42", "0.51", "0.04", "0.43", "0.93"],
     ["P2Rank", "CB-P2RANK-apo", "0.81", "0.21", "0.62", "0.14", "0.27", "0.81"],
     ["pLM-NN", "CB-PM", "0.88", "0.43", "0.52", "0.04", "0.44", "0.93"],
@@ -298,18 +298,18 @@ note(s, "A separate bug — a missing altLoc column, which shifted every field i
 s = new("Where the model is weak", "One stratum resists everything we have tried.")
 picture(s, "09_strata", top=1.80, width=10.2)
 note(s, "Every addition lifts BOTH strata by about the same amount, so the gap never closes: "
-        "28,000 fpocket runs over conformational ensembles are the weakest of the three (+0.005 here), "
-        "and ESM buys +0.024 on this stratum against +0.027 on the bulk. What separates these two "
-        "classes appears to be a property of MOTION, not of sequence or of static shape.",
+        "ESM buys +0.023 on this stratum against +0.026 on the bulk, and no single addition moves the "
+        "gap by more than 2 sd of the context-draw noise. What separates these two classes appears to "
+        "be a property of MOTION, not of sequence or of static shape.",
      top=6.30, color=INK)
 
 # ============================================================ 16. status
 s = new("Where it stands", None)
 bullets(s, [
     ("Settled", GREEN, True),
-    ("0.882 AUC / 0.476 AUPRC on CB-full, zero-shot. AUPRC and TPR beat pLM-NN by margins that "
-     "survive resampling the 231 test proteins. MCC does not, and the AUC margin holds only for the "
-     "118-feature run on CB-full — not on CB-P2RANK-apo, and not without ESM.", MUTED, False),
+    ("0.862 AUC / 0.441 AUPRC on CB-full, zero-shot, from apo structure alone. AUPRC and TPR beat "
+     "pLM-NN by margins that survive resampling the 231 test proteins. AUC and MCC are ties, and "
+     "FPR and weighted F1 are losses — we run hotter than their operating point.", MUTED, False),
     ("Measured, not assumed", GREEN, True),
     ("Two separate uncertainties are quantified: test-set sampling (95 % CIs, 10,000 bootstrap "
      "resamples) and the 50k context draw (12 seeds on Modal). Together they set a noise floor — "
@@ -319,7 +319,7 @@ bullets(s, [
      "(4,278 residues, 5.9 % positive, zero overlap with CryptoBench); scoring is not yet run.",
      MUTED, False),
     ("Open", RED, True),
-    ("The hard stratum at 0.714 AUC. Telling a cryptic site from a pocket that is already open is "
+    ("The hard stratum at 0.723 AUC against 0.882 on the bulk surface. Telling a cryptic site from a pocket that is already open is "
      "the discrimination the task is actually about.", MUTED, False),
 ], y=1.70, size=16, gap=10)
 

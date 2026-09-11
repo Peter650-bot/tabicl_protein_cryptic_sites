@@ -66,7 +66,8 @@ def main() -> None:
         clf.fit(sc.transform(X_tr), y_tr)
         s_tr = clf.predict_proba(sc.transform(X_tr))[:, 1]
         s_te = clf.predict_proba(sc.transform(X_te))[:, 1]
-        thr = evaluate.choose_threshold(y_tr, s_tr)   # on the context, never on test
+        # on the context, never on test
+        thr = evaluate.choose_threshold(y_tr, s_tr, ctx[C.GROUP_COL].to_numpy())
         r = evaluate.summarise(y_te, s_te, g_te, thr, label=f"seed {seed}")
         r["seed"] = seed
         r["n_negative"] = plan.n_negative

@@ -43,9 +43,14 @@ PLMNN = {"AUPRC": 0.36, "AUC": 0.86, "MCC": 0.39}
 # Axes are cropped to the model range. A dot's POSITION encodes the value --
 # there is no bar length to mislead -- and the full 0-1 range would collapse
 # every dot in a row onto the same pixel, which is the opposite of the point.
-COLUMNS = [("AUPRC", (0.385, 0.487), [.40, .42, .44, .46]),
-           ("AUC",   (0.826, 0.890), [.84, .85, .86, .87, .88]),
-           ("MCC",   (0.215, 0.425), [.25, .30, .35, .40])]
+# Cropped to the model range (the RSA floor sits far below and is drawn
+# separately). Re-derive these from build/model_ladder.json whenever the rows
+# are re-measured -- a stale crop silently clips dots off the panel.
+# Measured range excluding the floor: AUPRC 0.297-0.441, AUC 0.798-0.862,
+# MCC 0.226-0.374.
+COLUMNS = [("AUPRC", (0.285, 0.455), [.30, .34, .38, .42]),
+           ("AUC",   (0.792, 0.870), [.80, .82, .84, .86]),
+           ("MCC",   (0.215, 0.388), [.24, .28, .32, .36])]
 
 # "old sampler" no longer appears in build/model_ladder.json — every row was
 # re-measured on the fixed sampler. Kept so an archived ladder still renders.
@@ -152,8 +157,8 @@ fig.suptitle("Model choice moves the number far less than the features do",
              fontweight="semibold")
 fig.text(.028, .945,
          "Every configuration we ran, on CB-full (231 apo structures). One row per condition — same features, same negatives — so the "
-         "horizontal spread inside a row\nis the model effect alone (0.003–0.030 AUPRC). The vertical distance between rows is the feature "
-         "effect (0.398 → 0.476). Axes are cropped to the\nmodel range: a dot's position encodes the value, and the full 0–1 range "
+         "horizontal spread inside a row\nis the model effect alone (0.027–0.061 AUPRC). The vertical distance between rows is the feature "
+         "effect (0.343 → 0.441). Axes are cropped to the\nmodel range: a dot's position encodes the value, and the full 0–1 range "
          "would collapse every dot in a row onto one pixel.",
          ha="left", fontsize=8.8, color=INK2, linespacing=1.55, va="top")
 fig.text(.028, .022,

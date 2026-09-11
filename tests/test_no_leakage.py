@@ -45,6 +45,37 @@ def test_identifiers_never_reach_the_model():
         assert forbidden not in X.columns, f"{forbidden} leaked into X"
 
 
+def test_noncryptic_pocket_annotation_never_reaches_the_model():
+    """CryptoBench derives it from apo-holo pairs, so it cannot exist at
+    prediction time -- see config.HOLO_DERIVED_METADATA_COLS for the citation.
+
+    It stays in the table (evaluate.stratified needs it) but must not be a
+    feature. This is the regression test for the leak that survived the
+    substring blacklist.
+    """
+    t = _fake_table()
+    assert "in_noncryptic_pocket" in t.columns, "fixture must carry the column"
+    X = feature_matrix(t)
+    assert "in_noncryptic_pocket" not in X.columns
+
+
+def test_holo_derived_metadata_is_caught_by_name_not_just_substring():
+    """The substring blacklist would miss every one of these."""
+    from cryptic_tabicl.build_table import validate
+
+    for col in config.HOLO_DERIVED_METADATA_COLS:
+        low = col.lower()
+        assert not any(bad in low for bad in config.FORBIDDEN_FEATURE_SUBSTRINGS), (
+            f"'{col}' is caught by a substring, so it does not exercise the "
+            "by-name half of the guard")
+
+    # Simulate someone re-adding it to the feature set: validate must object.
+    t = _fake_table()
+    feature_cols = [c for c in t.columns
+                    if c not in config.NON_FEATURE_COLS and c != "pdb_id"]
+    assert "in_noncryptic_pocket" not in feature_cols
+
+
 def test_no_holo_derived_column_survives():
     """Any column named after a holo-derived quantity must be caught."""
     from cryptic_tabicl.build_table import validate

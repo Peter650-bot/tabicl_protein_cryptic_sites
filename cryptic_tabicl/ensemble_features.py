@@ -84,7 +84,17 @@ def compute_ensemble_features(
         # No usable network (too small, or fragmented). Fall back to the static
         # score with zero spread rather than dropping the protein: the features
         # stay defined and simply carry no ensemble information.
-        return _rows(static, np.tile(static[:, None], (1, 1)), records)
+        #
+        # The neighbourhood means still have to be appended. Returning _rows()
+        # directly used to skip them, leaving these proteins with 7 of their 14
+        # ensemble columns absent -- and `validate` only rejects columns that are
+        # ENTIRELY NaN, so a partially-NaN column would have passed silently. No
+        # protein in the CryptoBench set takes this path (the smallest has 52
+        # residues), but a peptide or a fragmented chain from any other source
+        # would.
+        rows = _rows(static, np.tile(static[:, None], (1, 1)), records)
+        _add_neighbourhood(rows, records)
+        return rows
 
     # Map each atom to its residue's position within the Ca subset, so an atom
     # of a residue lacking a Ca still moves with the nearest modelled residue.

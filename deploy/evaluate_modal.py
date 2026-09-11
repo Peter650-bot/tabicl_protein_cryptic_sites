@@ -70,16 +70,31 @@ image = (
     .add_local_dir("cryptic_tabicl", "/app/cryptic_tabicl")
 )
 
-# The ensemble-enriched table rides along when it exists, so one image serves
-# both the Tier A baseline and the enriched run and `--variant` just picks which
-# to read. Rebuilding per variant would make the two runs differ by more than
-# their feature set.
-if modal.is_local() and os.path.exists(TABLE_ENS):
+# The enriched tables ride along so one image serves every variant and
+# `--variant` just picks which to read: rebuilding per variant would make the
+# runs differ by more than their feature set.
+#
+# But mounting ALL of them stages ~600 MB locally before a single container
+# starts, which is enough to get the client killed on a small box -- a tierA run
+# died that way, during upload, having launched no work at all. So
+# CRYPTIC_ONLY_VARIANT trims the payload to the one table a run actually needs.
+# It changes what is MOUNTED, never what is computed: a run with it set reads
+# the identical parquet it would have read without it.
+_ONLY = os.environ.get("CRYPTIC_ONLY_VARIANT", "").strip()
+
+
+def _wanted(variant: str) -> bool:
+    return not _ONLY or _ONLY == variant
+
+
+if modal.is_local() and os.path.exists(TABLE_ENS) and _wanted("ensemble"):
     image = image.add_local_file(TABLE_ENS, "/data/residues_ens.parquet")
-if modal.is_local() and os.path.exists(TABLE_CONS):
+if (modal.is_local() and os.path.exists(TABLE_CONS)
+        and (_wanted("conservation") or _wanted("esm0"))):
     image = image.add_local_file(TABLE_CONS, "/data/residues_cons.parquet")
 for _k, _path in TABLE_ESM.items():
-    if modal.is_local() and os.path.exists(_path):
+    if (modal.is_local() and os.path.exists(_path)
+            and _wanted(f"esm{_k}")):
         image = image.add_local_file(_path, f"/data/residues_esm{_k}.parquet")
 
 app = modal.App("cryptobench-tabicl")
@@ -138,7 +153,8 @@ def run(smoke: bool = False, n_estimators: int = 8, budget: int = 50_000,
         t0 = time.time()
         clf = model.CrypticSitePredictor(n_estimators=n_estimators).fit(ctx)
         scores = clf.predict_by_protein(val)
-        thr = evaluate.choose_threshold(val[C.LABEL_COL].to_numpy(), scores)
+        thr = evaluate.choose_threshold(val[C.LABEL_COL].to_numpy(), scores,
+                                        val[C.GROUP_COL].to_numpy())
         thresholds.append(thr)
         res = evaluate.summarise(val[C.LABEL_COL].to_numpy(), scores,
                                  val[C.GROUP_COL].to_numpy(), thr,

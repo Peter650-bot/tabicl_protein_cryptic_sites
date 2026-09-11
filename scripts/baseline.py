@@ -93,6 +93,7 @@ def main() -> None:
     for tag, fit_on in fits:
         X_tr, X_te = _design(fit_on, test)
         y_tr = fit_on[C.LABEL_COL].to_numpy()
+        g_tr = fit_on[C.GROUP_COL].to_numpy()
 
         scaler = StandardScaler().fit(X_tr)
         Xs_tr, Xs_te = scaler.transform(X_tr), scaler.transform(X_te)
@@ -113,7 +114,7 @@ def main() -> None:
             s_tr = clf.predict_proba(a)[:, 1]
             s_te = clf.predict_proba(b)[:, 1]
             # threshold picked on the fitting data only, never on test
-            thr = evaluate.choose_threshold(y_tr, s_tr)
+            thr = evaluate.choose_threshold(y_tr, s_tr, g_tr)
             res = evaluate.summarise(y_te, s_te, g_te, thr, label=name)
             results.append(res)
             print(f"{name:28s} AUC {res['AUC']:.3f}  AUPRC {res['AUPRC']:.3f}  "

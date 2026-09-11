@@ -61,8 +61,21 @@ image = (
 
 app = modal.App("cryptobench-tabicl-fanout")
 
+# Each job's scores are ALSO written here, keyed by (run_id, k, fold).
+#
+# WHY: the aggregation below runs in the local entrypoint, so a client-side
+# disconnect used to throw away every GPU-second already spent. That is not
+# hypothetical -- a run on this host died at job 7 of 20 with
+# `AttributeError: 'Connection' object has no attribute '_transport'` after
+# ~20 minutes of T4 time, with the detached app still running and its results
+# no longer collectable. Persisting each job makes the GPU work durable and
+# `--collect` replays the aggregation from the volume for free.
+results_vol = modal.Volume.from_name("cryptobench-fanout-results",
+                                     create_if_missing=True)
 
-@app.function(image=image, gpu=GPU, timeout=5400, max_containers=20, retries=1)
+
+@app.function(image=image, gpu=GPU, timeout=5400, max_containers=20, retries=1,
+              volumes={"/results": results_vol})
 def score_one(job: dict) -> dict:
     """One (feature set, fold) job. Returns raw scores; no thresholding here.
 
@@ -71,6 +84,28 @@ def score_one(job: dict) -> dict:
     """
     sys.path.insert(0, "/app")
     import time
+
+    _TAG = f"k{job['n_components']}_{job['held'] or 'final'}"
+    # ---- resume: a job already in the volume is not recomputed ------------
+    # This is what makes the run pausable. Stop the app at any point, re-run
+    # later with the SAME --run-id, and only the missing jobs cost GPU time.
+    # The guard is the file's existence, so it is safe to re-enter repeatedly.
+    import json as _json
+    import os as _os
+    _run_dir = f"/results/{job['run_id']}"
+    _cached = f"{_run_dir}/{_TAG}.json"
+    try:
+        results_vol.reload()
+    except Exception:  # noqa: BLE001 - a reload failure must not lose the job
+        pass
+    if _os.path.exists(_cached):
+        with open(_cached) as _fh:
+            _prev = _json.load(_fh)
+        print(f"{_TAG}: cached, skipping ({_prev['seconds']:.0f}s originally)",
+              flush=True)
+        return _prev
+
+
 
     import pandas as pd
     from cryptic_tabicl import config as C, model, sampling
@@ -100,21 +135,47 @@ def score_one(job: dict) -> dict:
     print(f"k={k} held={held}: scored {len(target):,} rows in "
           f"{time.time()-t0:.0f}s", flush=True)
 
-    return {
+    out = {
         "n_components": k, "held": held, "n_features": n_feat,
         "seconds": time.time() - t0,
         "apo_id": target[C.GROUP_COL].tolist(),
         "chain": target["chain"].tolist(),
         "seq_id": target["seq_id"].tolist(),
+        # The insertion code belongs in the key here too: without it a stored
+        # score row is ambiguous for the ~500 residues that carry one.
+        "icode": target["icode"].astype(str).tolist(),
         "y": target[C.LABEL_COL].astype(int).tolist(),
         "score": [float(s) for s in scores],
         "in_noncryptic_pocket": target["in_noncryptic_pocket"].astype(int).tolist(),
     }
 
+    # Persist before returning, so the GPU-seconds survive a client disconnect.
+    import json
+    import os
+    # Same path the resume check reads, derived from the same _TAG so the two
+    # cannot drift apart.
+    os.makedirs(_run_dir, exist_ok=True)
+    with open(_cached, "w") as fh:
+        json.dump(out, fh)
+    results_vol.commit()
+    return out
+
+
+@app.function(image=image, timeout=1800, volumes={"/results": results_vol})
+def fetch_results(run_id: str) -> list:
+    """Read back one run's stored job results. Used by `--collect`."""
+    import glob
+    import json
+
+    results_vol.reload()
+    files = sorted(glob.glob(f"/results/{run_id}/*.json"))
+    print(f"reading {len(files)} stored job results from {run_id}", flush=True)
+    return [json.load(open(f)) for f in files]
+
 
 @app.local_entrypoint()
 def main(variants: str = "0,16,32,64", budget: int = 50_000,
-         n_estimators: int = 8):
+         n_estimators: int = 8, run_id: str = "", collect: bool = False):
     import json
     import time
 
@@ -127,19 +188,36 @@ def main(variants: str = "0,16,32,64", budget: int = 50_000,
     table = pd.read_parquet(TABLE_LOCAL, columns=["split", "fold"])
     folds = sorted(table.loc[table["split"] == "train", "fold"].dropna().unique())
 
+    run_id = run_id or time.strftime("run_%Y%m%d_%H%M%S")
     jobs = [{"n_components": k, "held": h, "budget": budget,
-             "n_estimators": n_estimators}
+             "n_estimators": n_estimators, "run_id": run_id}
             for k in ks for h in list(folds) + [None]]
-    print(f"{len(jobs)} jobs ({len(ks)} feature sets x {len(folds)+1} runs) "
-          f"across up to 20 {GPU} containers")
 
     t0 = time.time()
-    results, gpu_seconds = [], 0.0
-    for r in score_one.map(jobs):
-        results.append(r)
-        gpu_seconds += r["seconds"]
-        print(f"  done k={r['n_components']} held={r['held']} "
-              f"({len(results)}/{len(jobs)})", flush=True)
+    if collect:
+        # Re-aggregate a run whose client died. Costs nothing: no GPU is used.
+        print(f"collecting stored results for {run_id}")
+        results = fetch_results.remote(run_id)
+        gpu_seconds = sum(r["seconds"] for r in results)
+        missing = {(k, h) for k in ks for h in list(folds) + [None]} - {
+            (r["n_components"], r["held"]) for r in results}
+        if missing:
+            raise SystemExit(
+                f"{len(missing)} of {len(jobs)} jobs are missing from the "
+                f"volume, e.g. {sorted(missing, key=str)[:3]}. Re-run without "
+                "--collect (finished jobs are reused, not recomputed).")
+    else:
+        print(f"{len(jobs)} jobs ({len(ks)} feature sets x {len(folds)+1} runs) "
+              f"across up to 20 {GPU} containers  [run_id={run_id}]")
+        print("if the client disconnects, re-aggregate for free with:\n"
+              f"    modal run deploy/tabicl_fanout.py --collect "
+              f"--run-id {run_id} --variants {variants}", flush=True)
+        results, gpu_seconds = [], 0.0
+        for r in score_one.map(jobs):
+            results.append(r)
+            gpu_seconds += r["seconds"]
+            print(f"  done k={r['n_components']} held={r['held']} "
+                  f"({len(results)}/{len(jobs)})", flush=True)
 
     print(f"\nall jobs finished in {time.time()-t0:.0f}s wall / "
           f"{gpu_seconds/3600:.2f} GPU-h (~${gpu_seconds/3600*GPU_HOURLY_USD:.2f})")
@@ -153,7 +231,7 @@ def main(variants: str = "0,16,32,64", budget: int = 50_000,
         thresholds, cv_rows = [], []
         for r in sorted(cv, key=lambda r: str(r["held"])):
             y, s = np.array(r["y"]), np.array(r["score"])
-            thr = evaluate.choose_threshold(y, s)
+            thr = evaluate.choose_threshold(y, s, np.array(r["apo_id"]))
             thresholds.append(thr)
             cv_rows.append(evaluate.summarise(y, s, np.array(r["apo_id"]), thr,
                                               label=f"cv/{r['held']}"))

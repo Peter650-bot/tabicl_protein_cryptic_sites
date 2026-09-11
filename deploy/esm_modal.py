@@ -72,6 +72,7 @@ app = modal.App("cryptobench-esm")
               volumes={"/vol": vol})
 def embed_shard(payload: dict) -> dict:
     """Embed one batch of apo structures; write raw fp16 vectors to the Volume."""
+    import os
     sys.path.insert(0, "/app")
     import time
     from pathlib import Path
@@ -124,7 +125,15 @@ def embed_shard(payload: dict) -> dict:
 
     arr = (np.vstack(vecs) if vecs
            else np.zeros((0, EMBED_DIM), dtype=np.float16))
-    path = f"/vol/emb_{batch_id:04d}.npz"
+    # Shards live under a PER-RUN prefix. They used to be written flat as
+    # /vol/emb_XXXX.npz and the reducer globbed all of them, so a re-run with
+    # fewer batches than its predecessor silently mixed eras: a pilot over 8
+    # structures wrote emb_0000 and then read the 28 surviving shards of the
+    # previous full run, producing a 372,521-row table belonging to no single
+    # run. Prefixing is idempotent and destroys nothing.
+    run_dir = f"/vol/{payload['run_id']}"
+    os.makedirs(run_dir, exist_ok=True)
+    path = f"{run_dir}/emb_{batch_id:04d}.npz"
     np.savez(path, emb=arr,
              apo_id=np.array([i[0] for i in ids]),
              chain=np.array([i[1] for i in ids]),
@@ -140,8 +149,15 @@ def embed_shard(payload: dict) -> dict:
 
 @app.function(image=image, timeout=5400, cpu=8.0, memory=65536,
               volumes={"/vol": vol})
-def reduce_pca(split_of: dict, n_components: int = N_COMPONENTS) -> bytes:
-    """Concatenate every shard, fit PCA on TRAIN rows only, return 64 dims."""
+def reduce_pca(split_of: dict, run_id: str, n_batches: int,
+               expected_rows: int | None = None,
+               n_components: int = N_COMPONENTS) -> bytes:
+    """Concatenate THIS RUN's shards, fit PCA on TRAIN rows only, return 64 dims.
+
+    `run_id` and `n_batches` are not decoration: reading a stale shard is
+    silent, produces a plausible-looking table, and would poison every number
+    downstream. Both are asserted here rather than trusted.
+    """
     import glob
     import io
 
@@ -150,8 +166,12 @@ def reduce_pca(split_of: dict, n_components: int = N_COMPONENTS) -> bytes:
     from sklearn.decomposition import PCA
 
     vol.reload()
-    files = sorted(glob.glob("/vol/emb_*.npz"))
-    print(f"reading {len(files)} shard files", flush=True)
+    files = sorted(glob.glob(f"/vol/{run_id}/emb_*.npz"))
+    print(f"reading {len(files)} shard files from run {run_id}", flush=True)
+    if len(files) != n_batches:
+        raise RuntimeError(
+            f"run {run_id}: expected {n_batches} shards, found {len(files)}. "
+            "Refusing to reduce a partial run.")
 
     embs, meta = [], []
     for f in files:
@@ -167,6 +187,15 @@ def reduce_pca(split_of: dict, n_components: int = N_COMPONENTS) -> bytes:
     X = np.vstack(embs).astype(np.float32)
     m = pd.concat(meta, ignore_index=True)
     print(f"total {X.shape[0]:,} residues x {X.shape[1]} dims", flush=True)
+    if expected_rows is not None and X.shape[0] != expected_rows:
+        raise RuntimeError(
+            f"embedded {X.shape[0]:,} residues but the mapper reported "
+            f"{expected_rows:,}. The shards do not belong to one run.")
+    if m.duplicated(["apo_id", "chain", "seq_id", "icode"]).any():
+        n = int(m.duplicated(["apo_id", "chain", "seq_id", "icode"]).sum())
+        raise RuntimeError(
+            f"{n} duplicate residue keys across shards -- two runs' shards were "
+            "read together.")
 
     is_train = m["apo_id"].map(split_of).eq("train").to_numpy()
     print(f"PCA fit on {is_train.sum():,} train rows "
@@ -188,6 +217,7 @@ def reduce_pca(split_of: dict, n_components: int = N_COMPONENTS) -> bytes:
 
 @app.local_entrypoint()
 def main(batch_size: int = 40, limit: int = 0, n_components: int = N_COMPONENTS):
+    import hashlib
     import json
     import time
 
@@ -219,10 +249,18 @@ def main(batch_size: int = 40, limit: int = 0, n_components: int = N_COMPONENTS)
         targets = targets[:limit]
     items = [{"apo_id": a, "pdb_id": pdb_of[a], "chains": sorted(chains[a])}
              for a in targets]
-    batches = [{"batch_id": i // batch_size, "items": items[i:i + batch_size]}
+    # A run id keyed on the run's own inputs, so two runs over different target
+    # sets can never share a shard directory -- and re-running the SAME inputs
+    # reuses the same one rather than accumulating junk.
+    run_id = "run_" + hashlib.blake2b(
+        json.dumps([targets, batch_size], sort_keys=True).encode(),
+        digest_size=6).hexdigest()
+    batches = [{"batch_id": i // batch_size, "run_id": run_id,
+                "items": items[i:i + batch_size]}
                for i in range(0, len(items), batch_size)]
 
-    print(f"{len(items)} apo structures -> {len(batches)} batches on {GPU}")
+    print(f"{len(items)} apo structures -> {len(batches)} batches on {GPU} "
+          f"(shard prefix {run_id})")
     t0 = time.time()
     total, all_failures, gpu_seconds = 0, [], 0.0
     for r in embed_shard.map(batches):
@@ -237,7 +275,8 @@ def main(batch_size: int = 40, limit: int = 0, n_components: int = N_COMPONENTS)
     for apo_id, msg in all_failures[:10]:
         print(f"  FAILED {apo_id}: {msg}")
 
-    blob = reduce_pca.remote(split_of, n_components)
+    blob = reduce_pca.remote(split_of, run_id, len(batches),
+                             expected_rows=total, n_components=n_components)
     out = C.BUILD_DIR / "esm_features.parquet"
     out.write_bytes(blob)
     print(f"\nwrote {out} ({len(blob)/1e6:.0f} MB)")
