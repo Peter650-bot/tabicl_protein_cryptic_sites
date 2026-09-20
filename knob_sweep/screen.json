@@ -1,0 +1,128 @@
+{
+  "run_id": "ks_knobs1",
+  "stage": "screen",
+  "seed": 0,
+  "folds": [
+    "train-fold-0"
+  ],
+  "rows": {
+    "avg_probs": {
+      "train-fold-0": {
+        "AUC": 0.8147625335192306,
+        "AUPRC": 0.3754036610156751,
+        "seconds": 652.9585766792297
+      }
+    },
+    "batch8": {
+      "train-fold-0": {
+        "AUC": 0.8148303196983387,
+        "AUPRC": 0.37580087084606834,
+        "seconds": 662.3145861625671
+      }
+    },
+    "control": {
+      "train-fold-0": {
+        "AUC": 0.8148468688074666,
+        "AUPRC": 0.37590057711257974,
+        "seconds": 663.5421209335327
+      }
+    },
+    "est32_norm5": {
+      "train-fold-0": {
+        "AUC": 0.8165619413635398,
+        "AUPRC": 0.3782268966726507,
+        "seconds": 2642.1932923793793
+      }
+    },
+    "est32": {
+      "train-fold-0": {
+        "AUC": 0.8157750501513443,
+        "AUPRC": 0.3750739771064913,
+        "seconds": 2545.460997104645
+      }
+    },
+    "kv_repr": {
+      "train-fold-0": {
+        "AUC": 0.814813364102334,
+        "AUPRC": 0.3759346919015218,
+        "seconds": 416.61454129219055
+      }
+    },
+    "norm4": {
+      "train-fold-0": {
+        "AUC": 0.8152862131755899,
+        "AUPRC": 0.3755062409895422,
+        "seconds": 654.6370258331299
+      }
+    },
+    "norm5": {
+      "train-fold-0": {
+        "AUC": 0.8147357042293762,
+        "AUPRC": 0.37465163878170876,
+        "seconds": 677.3417882919312
+      }
+    },
+    "outlier8": {
+      "train-fold-0": {
+        "AUC": 0.814902693010594,
+        "AUPRC": 0.37589663336536966,
+        "seconds": 692.7483644485474
+      }
+    },
+    "shuffle_random": {
+      "train-fold-0": {
+        "AUC": 0.8146789936484959,
+        "AUPRC": 0.3743897557629155,
+        "seconds": 667.5443539619446
+      }
+    }
+  },
+  "configs": {
+    "control": {},
+    "norm4": {
+      "norm_methods": [
+        "none",
+        "power",
+        "quantile",
+        "robust"
+      ]
+    },
+    "norm5": {
+      "norm_methods": [
+        "none",
+        "power",
+        "quantile",
+        "quantile_rtdl",
+        "robust"
+      ]
+    },
+    "est32": {
+      "n_estimators": 32
+    },
+    "est32_norm5": {
+      "n_estimators": 32,
+      "norm_methods": [
+        "none",
+        "power",
+        "quantile",
+        "quantile_rtdl",
+        "robust"
+      ]
+    },
+    "shuffle_random": {
+      "feat_shuffle_method": "random"
+    },
+    "outlier8": {
+      "outlier_threshold": 8.0
+    },
+    "avg_probs": {
+      "average_logits": false
+    },
+    "batch8": {
+      "batch_size": 8
+    },
+    "kv_repr": {
+      "kv_cache": "repr"
+    }
+  }
+}

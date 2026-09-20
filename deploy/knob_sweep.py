@@ -165,7 +165,7 @@ def _build_jobs(names, folds, budget, seed):
 
 @app.local_entrypoint()
 def main(stage: str = "screen", run_id: str = "", finalist: str = "",
-         budget: int = 50_000, collect: bool = False):
+         budget: int = 50_000, collect: bool = False, spawn: bool = False):
     import json
     import time
 
@@ -191,6 +191,21 @@ def main(stage: str = "screen", run_id: str = "", finalist: str = "",
     # Structural guard against a cache alias silently faking a null result.
     tags = [job_tag(j) for j in jobs]
     assert len(set(tags)) == len(tags), "job tags collide; refusing to run"
+
+    if spawn:
+        # Fire-and-forget. `.map()` needs one gRPC stream up for the whole run,
+        # and this host drops it -- twice, killing the two 32-estimator jobs
+        # that outlive the connection. Spawning makes the client's involvement
+        # one short RPC per job, after which the job's survival is Modal's
+        # problem and its result lands in the volume.
+        f = modal.Function.from_name("cryptobench-knob-sweep", "score_one")
+        for j in jobs:
+            print(f"spawned {j['name']} held={j['held']}: {f.spawn(j).object_id}")
+        print(f"\n{len(jobs)} jobs spawned. Cached ones return immediately.\n"
+              f"Collect when the volume has them all:\n"
+              f"    modal run deploy/knob_sweep.py --stage {stage} "
+              f"--run-id {run_id} --collect")
+        return
 
     t0 = time.time()
     if collect:
