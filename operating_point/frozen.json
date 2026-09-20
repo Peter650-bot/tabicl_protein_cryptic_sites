@@ -1,0 +1,302 @@
+{
+  "created": "2026-09-21",
+  "target_fpr": 0.05,
+  "selection": "per-fold threshold at target mean per-protein FPR, frozen as the median of the 4 folds (identical to the incumbent rule)",
+  "headline_rule": "global_threshold",
+  "headline_rationale": "pLM-NN used a single constant threshold; the headline row stays protocol-matched to it",
+  "secondary_rule": "zscore",
+  "secondary_selection": "chosen on nested-CV MCC among rules with FPR <= 0.055",
+  "max_nested_fpr": 0.055,
+  "cv_source": {
+    "volume": "cryptobench-fanout-results",
+    "run_id": "run_20260910_124330",
+    "retrieved": "2026-09-21",
+    "note": "Per-residue CV+final scores from the run that produced build/modal_result_esm64.json (AUC 0.862 / AUPRC 0.441). Gate: k64_final scores are elementwise equal to that file.",
+    "files": {
+      "k64_train-fold-0.json": {
+        "sha256": "e46ddc505dd8d707427e3e9007017d37de9a5372968d56980b7bf80b42cdc9e6",
+        "bytes": 3823718
+      },
+      "k64_train-fold-1.json": {
+        "sha256": "6fcdb81179884e1df3d6ec27ee43eb1fbbae974901ac002b2db5885381c93243",
+        "bytes": 3909809
+      },
+      "k64_train-fold-2.json": {
+        "sha256": "bc0e492e4e6c9b1c77e3e77f3bfd7c90b2579a1c0ed0cb80b603c9cfa5c2a5da",
+        "bytes": 3984855
+      },
+      "k64_train-fold-3.json": {
+        "sha256": "0eb8bda9938caf2ea3807fbcb2e30d7269466d7ef34cccc4bb18f4c10c113f01",
+        "bytes": 3633097
+      },
+      "k64_final.json": {
+        "sha256": "725df33e9657a7852c0a523789a9f54a020a8ea968d6114e4f4e19e18a59600a",
+        "bytes": 3858633
+      }
+    }
+  },
+  "rules": {
+    "global_threshold": {
+      "fold_thresholds": [
+        0.5896245241165161,
+        0.5432942509651184,
+        0.5825172662734985,
+        0.5585943460464478
+      ],
+      "frozen_threshold": 0.5705558061599731,
+      "operating_point": "score >= 0.5706",
+      "nested_cv_mean": {
+        "TPR": 0.4386451890014629,
+        "FPR": 0.050099097051955276,
+        "MCC": 0.3352878967539421,
+        "F1": 0.34885867292623535,
+        "F1_weighted": 0.9193995774542039
+      },
+      "nested_cv_per_fold": [
+        {
+          "method": "train-fold-0",
+          "n_proteins": 223,
+          "n_residues": 75800,
+          "prevalence": 0.051649076517150394,
+          "threshold": 0.5612683296203613,
+          "AUC": 0.8148468688074666,
+          "AUPRC": 0.37590057711257974,
+          "ACC": 0.9118130021864969,
+          "TPR": 0.42645140958985733,
+          "FPR": 0.05570982256122595,
+          "MCC": 0.305323990115219,
+          "F1": 0.32002870524052307,
+          "F1_weighted": 0.9167857315613238,
+          "AUC_pooled": 0.857498047248199,
+          "AUPRC_pooled": 0.31073490658852165
+        },
+        {
+          "method": "train-fold-1",
+          "n_proteins": 228,
+          "n_residues": 77725,
+          "prevalence": 0.05504020585397234,
+          "threshold": 0.5767008066177368,
+          "AUC": 0.8595169995011996,
+          "AUPRC": 0.44206501456375785,
+          "ACC": 0.9183660910394286,
+          "TPR": 0.4442743782938754,
+          "FPR": 0.04388310312900308,
+          "MCC": 0.3561116470216717,
+          "F1": 0.3658311554197229,
+          "F1_weighted": 0.9188195840061315,
+          "AUC_pooled": 0.883004234867805,
+          "AUPRC_pooled": 0.36115765107547837
+        },
+        {
+          "method": "train-fold-2",
+          "n_proteins": 226,
+          "n_residues": 79083,
+          "prevalence": 0.05269147604415614,
+          "threshold": 0.5642051696777344,
+          "AUC": 0.8335285239550669,
+          "AUPRC": 0.41127647293789754,
+          "ACC": 0.9160856535306968,
+          "TPR": 0.4577813548869732,
+          "FPR": 0.053335596903273594,
+          "MCC": 0.35012967396839356,
+          "F1": 0.3648145000995293,
+          "F1_weighted": 0.9216538988645014,
+          "AUC_pooled": 0.8803596897575762,
+          "AUPRC_pooled": 0.3437399705030425
+        },
+        {
+          "method": "train-fold-3",
+          "n_proteins": 228,
+          "n_residues": 72343,
+          "prevalence": 0.05487745877279073,
+          "threshold": 0.5719261169433594,
+          "AUC": 0.8288653328863087,
+          "AUPRC": 0.40520386140091336,
+          "ACC": 0.918524753130363,
+          "TPR": 0.4260736132351456,
+          "FPR": 0.047467865614318476,
+          "MCC": 0.32958627591048417,
+          "F1": 0.3447603309451661,
+          "F1_weighted": 0.9203390953848584,
+          "AUC_pooled": 0.8685768952723063,
+          "AUPRC_pooled": 0.3360648408268412
+        }
+      ]
+    },
+    "rank": {
+      "fold_thresholds": [
+        0.926391382405745,
+        0.9192982456140351,
+        0.9215311004784689,
+        0.9236842105263158
+      ],
+      "frozen_threshold": 0.9226076555023923,
+      "operating_point": "top 7.74% per protein",
+      "nested_cv_mean": {
+        "TPR": 0.4373735000147567,
+        "FPR": 0.05006290642605084,
+        "MCC": 0.3422270672584498,
+        "F1": 0.364479762351728,
+        "F1_weighted": 0.9195635504605411
+      },
+      "nested_cv_per_fold": [
+        {
+          "method": "train-fold-0",
+          "n_proteins": 223,
+          "n_residues": 75800,
+          "prevalence": 0.051649076517150394,
+          "threshold": 0.9215876089060987,
+          "AUC": 0.8148468688074666,
+          "AUPRC": 0.37590057711257974,
+          "ACC": 0.9119451250927251,
+          "TPR": 0.4194848486917051,
+          "FPR": 0.05411017587839439,
+          "MCC": 0.314055095805667,
+          "F1": 0.3395553758762725,
+          "F1_weighted": 0.9183741242387181,
+          "AUC_pooled": 0.8400221529509448,
+          "AUPRC_pooled": 0.26922817878121696
+        },
+        {
+          "method": "train-fold-1",
+          "n_proteins": 228,
+          "n_residues": 77725,
+          "prevalence": 0.05504020585397234,
+          "threshold": 0.9239280774550485,
+          "AUC": 0.8595169995011996,
+          "AUPRC": 0.44206501456375785,
+          "ACC": 0.915790716024912,
+          "TPR": 0.45599567303399946,
+          "FPR": 0.046389221029968196,
+          "MCC": 0.3676295938838737,
+          "F1": 0.38540779953368953,
+          "F1_weighted": 0.9195178859289568,
+          "AUC_pooled": 0.8718071809554555,
+          "AUPRC_pooled": 0.3204425970448642
+        },
+        {
+          "method": "train-fold-2",
+          "n_proteins": 226,
+          "n_residues": 79083,
+          "prevalence": 0.05269147604415614,
+          "threshold": 0.9231824417009602,
+          "AUC": 0.8335285239550669,
+          "AUPRC": 0.41127647293789754,
+          "ACC": 0.916220383091899,
+          "TPR": 0.4375894617678781,
+          "FPR": 0.048873524735457884,
+          "MCC": 0.347936071107106,
+          "F1": 0.36889412288596807,
+          "F1_weighted": 0.9215311746494685,
+          "AUC_pooled": 0.8627723413393947,
+          "AUPRC_pooled": 0.3014972529890426
+        },
+        {
+          "method": "train-fold-3",
+          "n_proteins": 228,
+          "n_residues": 72343,
+          "prevalence": 0.05487745877279073,
+          "threshold": 0.9225449515905948,
+          "AUC": 0.8288653328863087,
+          "AUPRC": 0.40520386140091336,
+          "ACC": 0.9139244483679383,
+          "TPR": 0.4364240165654444,
+          "FPR": 0.05087870406038288,
+          "MCC": 0.33928750823715265,
+          "F1": 0.364061751110982,
+          "F1_weighted": 0.9188310170250208,
+          "AUC_pooled": 0.8504635154161232,
+          "AUPRC_pooled": 0.2961789429111532
+        }
+      ]
+    },
+    "zscore": {
+      "fold_thresholds": [
+        2.0449648674547722,
+        1.90160634601097,
+        1.9631241594794695,
+        2.016213656699731
+      ],
+      "frozen_threshold": 1.9896689080896004,
+      "operating_point": "z >= 1.9897 within protein",
+      "nested_cv_mean": {
+        "TPR": 0.4456695883453563,
+        "FPR": 0.04999508448809291,
+        "MCC": 0.3455526430679929,
+        "F1": 0.3669995213197414,
+        "F1_weighted": 0.9204915283087223
+      },
+      "nested_cv_per_fold": [
+        {
+          "method": "train-fold-0",
+          "n_proteins": 223,
+          "n_residues": 75800,
+          "prevalence": 0.051649076517150394,
+          "threshold": 1.9630522998855366,
+          "AUC": 0.8148468688074666,
+          "AUPRC": 0.37590057711257974,
+          "ACC": 0.9126657964586722,
+          "TPR": 0.42292684025221505,
+          "FPR": 0.054045419680797825,
+          "MCC": 0.3136753857091931,
+          "F1": 0.3386007883196065,
+          "F1_weighted": 0.9187700438462533,
+          "AUC_pooled": 0.8400430586991018,
+          "AUPRC_pooled": 0.2698927374895922
+        },
+        {
+          "method": "train-fold-1",
+          "n_proteins": 228,
+          "n_residues": 77725,
+          "prevalence": 0.05504020585397234,
+          "threshold": 2.0104119366906543,
+          "AUC": 0.8595169995011996,
+          "AUPRC": 0.44206501456375785,
+          "ACC": 0.9175834851371374,
+          "TPR": 0.46107073825721673,
+          "FPR": 0.045307993538614755,
+          "MCC": 0.37168584131980914,
+          "F1": 0.388962348472608,
+          "F1_weighted": 0.9206507258981675,
+          "AUC_pooled": 0.8725670225812747,
+          "AUPRC_pooled": 0.32306511532696613
+        },
+        {
+          "method": "train-fold-2",
+          "n_proteins": 226,
+          "n_residues": 79083,
+          "prevalence": 0.05269147604415614,
+          "threshold": 1.9907955357701657,
+          "AUC": 0.8335285239550669,
+          "AUPRC": 0.41127647293789754,
+          "ACC": 0.9179357385658555,
+          "TPR": 0.44806292162081746,
+          "FPR": 0.048767009353000726,
+          "MCC": 0.3543091453115138,
+          "F1": 0.374626565885324,
+          "F1_weighted": 0.9231911115398276,
+          "AUC_pooled": 0.862600375279284,
+          "AUPRC_pooled": 0.29361033426767014
+        },
+        {
+          "method": "train-fold-3",
+          "n_proteins": 228,
+          "n_residues": 72343,
+          "prevalence": 0.05487745877279073,
+          "threshold": 1.9735404971080153,
+          "AUC": 0.8288653328863087,
+          "AUPRC": 0.40520386140091336,
+          "ACC": 0.9143979672720264,
+          "TPR": 0.450617853251176,
+          "FPR": 0.05185991537995832,
+          "MCC": 0.3425401999314555,
+          "F1": 0.3658083826014271,
+          "F1_weighted": 0.9193542319506406,
+          "AUC_pooled": 0.8515865374112316,
+          "AUPRC_pooled": 0.28392944022834476
+        }
+      ]
+    }
+  },
+  "commitment": "The test set is scored exactly once, by --apply, after this file is committed. The frozen threshold is reported whatever it gives: if it lands below the FPR target with a lower TPR, that is the result."
+}

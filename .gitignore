@@ -9,3 +9,6 @@ __pycache__/
 
 # Local structure cache / stage dir referenced by cryptic_tabicl/config.py
 .DS_Store
+
+# staged per-residue CV scores (re-fetch with modal volume get; manifest is committed)
+build/cv_scores/

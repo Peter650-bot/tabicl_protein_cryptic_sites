@@ -1,0 +1,28 @@
+{
+  "volume": "cryptobench-fanout-results",
+  "run_id": "run_20260910_124330",
+  "retrieved": "2026-09-21",
+  "note": "Per-residue CV+final scores from the run that produced build/modal_result_esm64.json (AUC 0.862 / AUPRC 0.441). Gate: k64_final scores are elementwise equal to that file.",
+  "files": {
+    "k64_train-fold-0.json": {
+      "sha256": "e46ddc505dd8d707427e3e9007017d37de9a5372968d56980b7bf80b42cdc9e6",
+      "bytes": 3823718
+    },
+    "k64_train-fold-1.json": {
+      "sha256": "6fcdb81179884e1df3d6ec27ee43eb1fbbae974901ac002b2db5885381c93243",
+      "bytes": 3909809
+    },
+    "k64_train-fold-2.json": {
+      "sha256": "bc0e492e4e6c9b1c77e3e77f3bfd7c90b2579a1c0ed0cb80b603c9cfa5c2a5da",
+      "bytes": 3984855
+    },
+    "k64_train-fold-3.json": {
+      "sha256": "0eb8bda9938caf2ea3807fbcb2e30d7269466d7ef34cccc4bb18f4c10c113f01",
+      "bytes": 3633097
+    },
+    "k64_final.json": {
+      "sha256": "725df33e9657a7852c0a523789a9f54a020a8ea968d6114e4f4e19e18a59600a",
+      "bytes": 3858633
+    }
+  }
+}
