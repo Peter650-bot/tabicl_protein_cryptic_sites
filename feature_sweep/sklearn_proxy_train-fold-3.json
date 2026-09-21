@@ -1,0 +1,64 @@
+{
+  "model": "LogisticRegression",
+  "held": "train-fold-3",
+  "seed": 0,
+  "budget": 50000,
+  "rows": {
+    "control": {
+      "AUPRC": 0.3885384105079056,
+      "AUC": 0.8264821623416487,
+      "n_features": 117,
+      "n_numeric": 115,
+      "seconds": 6.477829694747925
+    },
+    "seqwin": {
+      "AUPRC": 0.3878862854620837,
+      "AUC": 0.826247400885214,
+      "n_features": 130,
+      "n_numeric": 128,
+      "seconds": 5.6387739181518555
+    },
+    "esmnb": {
+      "AUPRC": 0.3900998280407747,
+      "AUC": 0.8262691877686602,
+      "n_features": 133,
+      "n_numeric": 131,
+      "seconds": 5.930723428726196
+    },
+    "nbstat": {
+      "AUPRC": 0.38966202869886785,
+      "AUC": 0.8263836282399047,
+      "n_features": 132,
+      "n_numeric": 130,
+      "seconds": 6.1741461753845215
+    },
+    "pctx": {
+      "AUPRC": 0.38909740079890226,
+      "AUC": 0.8261613804967813,
+      "n_features": 125,
+      "n_numeric": 123,
+      "seconds": 5.656666994094849
+    },
+    "prel": {
+      "AUPRC": 0.3905433125792279,
+      "AUC": 0.8297131534388625,
+      "n_features": 129,
+      "n_numeric": 127,
+      "seconds": 6.847843885421753
+    },
+    "free_combo": {
+      "AUPRC": 0.38660044308272273,
+      "AUC": 0.8288823718953154,
+      "n_features": 150,
+      "n_numeric": 148,
+      "seconds": 7.0152788162231445
+    },
+    "trim": {
+      "AUPRC": 0.3848315164458963,
+      "AUC": 0.8250127310029309,
+      "n_features": 93,
+      "n_numeric": 91,
+      "seconds": 5.79227352142334
+    }
+  }
+}

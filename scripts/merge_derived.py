@@ -46,6 +46,10 @@ def main() -> None:
                     default=[C.BUILD_DIR / "derived_features.parquet"],
                     help="feature parquets to join, keyed on the residue tuple")
     ap.add_argument("--out", type=Path, default=C.BUILD_DIR / "residues_derived.parquet")
+    ap.add_argument("--blocks", nargs="*", default=None,
+                    help="supervised nestings to keep, e.g. train-fold-0 final. "
+                         "All five blocks are 160 columns; a screen needs one. "
+                         "Omit to keep every block.")
     args = ap.parse_args()
 
     base = pd.read_parquet(args.table)
@@ -59,6 +63,12 @@ def main() -> None:
         new = pd.read_parquet(path)
         new["icode"] = new["icode"].fillna("").astype(str)
         cols = [c for c in new.columns if c not in KEYS]
+        if args.blocks is not None and any("__fit_" in c for c in cols):
+            keep = {f"__fit_{b}" for b in args.blocks}
+            cols = [c for c in cols
+                    if "__fit_" not in c or any(c.endswith(k) for k in keep)]
+            print(f"  keeping supervised blocks {args.blocks} "
+                  f"({len(cols)} columns)")
         clash = sorted(set(cols) & set(merged.columns))
         if clash:
             raise SystemExit(f"{path.name} would overwrite existing columns: {clash}")
@@ -82,7 +92,18 @@ def main() -> None:
         raise SystemExit("refusing to write a table that fails validation")
 
     print("\nfeature sets resolvable against this table:")
-    sup = sorted(c for c in merged.columns if c.startswith(FS.SUPERVISED_PREFIX))
+    # One nesting's block, not all of them: a supervised arm is 53 base columns
+    # plus 32, and listing it against every block at once would report a feature
+    # count no job will ever use.
+    blocks = sorted({c.split("__fit_", 1)[1] for c in merged.columns
+                     if c.startswith(FS.SUPERVISED_PREFIX) and "__fit_" in c})
+    one = blocks[0] if blocks else None
+    sup = sorted(c for c in merged.columns
+                 if c.startswith(FS.SUPERVISED_PREFIX) and c.endswith(f"__fit_{one}")) \
+        if one else []
+    if blocks:
+        print(f"  (supervised arms shown against block {one!r}; "
+              f"blocks present: {blocks})")
     for name in FS.FEATURE_SETS:
         want = sup if name in FS.USES_SUPERVISED_ESM else ()
         if name in FS.USES_SUPERVISED_ESM and not sup:

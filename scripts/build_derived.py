@@ -154,6 +154,13 @@ def main() -> None:
     out = build(table, coords)
     new = [c for c in out.columns if c not in KEYS]
 
+    # float32 for the derived block. These are new columns, so narrowing them
+    # cannot move a published number, and it halves what has to be uploaded to
+    # Modal -- the base 117 are deliberately left at whatever dtype they were
+    # published with, because the control arm has to reproduce its stored
+    # scores elementwise.
+    out[new] = out[new].astype("float32")
+
     print(f"derived: {len(new)} columns")
     nan_rate = out[new].isna().mean()
     worst = nan_rate.sort_values(ascending=False).head(5)

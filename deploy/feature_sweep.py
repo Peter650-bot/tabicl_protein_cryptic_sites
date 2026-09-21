@@ -124,9 +124,15 @@ def score_one(job: dict) -> dict:
     # Hand the model exactly this arm's columns, plus the bookkeeping columns
     # `feature_matrix` is going to drop anyway. Anything else in the table --
     # another arm's family, another nesting's block -- must not be visible.
-    keep = list(dict.fromkeys(
-        cols + [c for c in C.NON_FEATURE_COLS if c in table.columns]))
-    table = table[keep]
+    #
+    # ORDER IS PRESERVED, and that is not cosmetic. TabICL's default
+    # `feat_shuffle_method="latin"` assigns features to groups by POSITION, so
+    # reordering the columns changes the scores. Selecting in table order keeps
+    # the control arm's 117 columns in exactly the order the published run fed
+    # them, which is what makes the determinism gate meaningful rather than
+    # approximate.
+    wanted = set(cols) | {c for c in C.NON_FEATURE_COLS if c in table.columns}
+    table = table[[c for c in table.columns if c in wanted]]
     if supervised:
         table = table.rename(columns={c: f"{FS.SUPERVISED_PREFIX}{i:02d}"
                                       for i, c in enumerate(supervised)})
