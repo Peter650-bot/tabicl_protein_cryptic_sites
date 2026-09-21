@@ -97,7 +97,7 @@ def test_chain_parse_survives_an_insertion_code():
 
 # ------------------------------------------------------------------ merges
 @pytest.mark.parametrize("module", ["merge_ensemble", "merge_conservation",
-                                    "merge_esm"])
+                                    "merge_esm", "merge_derived"])
 def test_every_merge_joins_on_icode(module):
     """A side table joined without icode gives 60A the features of 60.
 

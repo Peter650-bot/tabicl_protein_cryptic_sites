@@ -81,7 +81,16 @@ RESIDUE_ID_COLS = ("apo_id", "chain", "seq_id", "icode")
 HOLO_DERIVED_METADATA_COLS = frozenset({"in_noncryptic_pocket"})
 
 # Columns that exist for bookkeeping and must never be handed to the model.
-NON_FEATURE_COLS = (set(RESIDUE_ID_COLS) | {LABEL_COL, GROUP_COL, "fold", "split"}
+#
+# `pdb_id` belongs here and for a long time did not. It was instead re-excluded
+# by hand at roughly a dozen call sites, each spelling `and c != "pdb_id"`, and
+# a guard that has to be remembered once per call site is a guard that will
+# eventually be forgotten -- feeding the model a structure identifier it could
+# memorise proteins from. Listing it here makes those hand-written exclusions
+# redundant rather than load-bearing; `model.feature_matrix` already dropped it,
+# so nothing about the published numbers moves.
+NON_FEATURE_COLS = (set(RESIDUE_ID_COLS) | {LABEL_COL, GROUP_COL, "fold", "split",
+                                            "pdb_id"}
                    | set(HOLO_DERIVED_METADATA_COLS))
 
 # Anything derived from the holo structure is the label in disguise. Named here

@@ -54,7 +54,7 @@ def feature_matrix(table: pd.DataFrame) -> pd.DataFrame:
     parquet self-describing while guaranteeing the model never sees `apo_id`,
     which would otherwise let it memorise proteins.
     """
-    drop = set(config.NON_FEATURE_COLS) | {"pdb_id"}
+    drop = set(config.NON_FEATURE_COLS)
     X = table[[c for c in table.columns if c not in drop]].copy()
     for col in CATEGORICAL_COLS:
         if col in X:
