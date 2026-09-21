@@ -58,6 +58,35 @@ while a holo-derived feature was reaching the model. Without it, AUPRC 0.388
 [0.356, 0.420] contains pLM-NN's 0.36 — a tie — and MCC falls below theirs. Only the
 117-feature row clears the benchmark, and only on two metrics.
 
+**Fine-tuning adds almost nothing (2026-09-16).** The 117-feature run was repeated with
+`tabicl[finetune]`: the weights were adapted per fold, and the context, threshold rule and
+test split were unchanged. Result: AUC 0.863 / AUPRC 0.444 / TPR 0.571 / FPR 0.072 /
+MCC 0.378. That is +0.002 AUPRC over a paired zero-shot control, with a 95% CI of
+[−0.002, +0.007], and the hard stratum does not move. The zero-shot numbers above stay
+the headline. Full write-up in [`fine_tuned_tabicl/README.md`](fine_tuned_tabicl/README.md).
+
+**The FPR overshoot was the decision rule, not the model (2026-09-21).** The threshold is
+swept to a mean per-protein FPR of 0.05 and hits it on every CV fold, but lands at 0.071
+on test — because one global cutoff was shared by all 231 proteins while every metric here
+is computed per protein. Selecting the *same* target with a per-protein rule (`z ≥ 1.9897`
+within each protein, frozen on the CV folds) lands at **FPR 0.0502**: AUC 0.862 /
+AUPRC 0.441 / TPR 0.499 / MCC 0.380 / F1 0.395 / weighted F1 0.921. AUC and AUPRC are
+*arithmetically* unchanged — they are per-protein rank statistics and the transform is
+monotone within each protein. It is a trade: a paired bootstrap gives FPR −0.0205 and
+weighted F1 +0.0090 as significant gains against a significant TPR loss of −0.0598, and
+the MCC gain is not significant, so MCC remains a loss against pLM-NN's 0.39. The global
+cutoff stays the headline for protocol-matched comparability. Write-up in
+[`operating_point/README.md`](operating_point/README.md), RESULTS.md § 10.
+
+**TabICL's unset knobs are all null (2026-09-21).** Nine of the 16 `TabICLClassifier`
+arguments left at library defaults were swept on one CV fold, paired on a fixed context
+seed, for $1.68. Nothing cleared the +0.003 noise band, so nothing was promoted and test
+was never scored — including `n_estimators=32` (−0.0008 at 4× compute) and a doubled
+outlier clip (−0.0000), which kills the theory that the default |z| > 4 was truncating
+heavy-tailed ESM components. One keeper: `kv_cache="repr"` runs 37 % faster at unchanged
+metrics, though not bit-reproducibly. [`knob_sweep/README.md`](knob_sweep/README.md),
+RESULTS.md § 11.
+
 Only the CB-full row is comparable: our evaluation covers all 231 test proteins, whereas
 the published P2Rank and PocketMiner figures are on subsets those tools could run on.
 CB-P2RANK-apo (the 184 single-chain test structures) *is* reconstructible and we report
@@ -84,7 +113,8 @@ The FPR overshoot is now cleanly attributable. The threshold is swept to a **mea
 per-protein FPR of 0.05** — the statistic CryptoBench publishes — and hits exactly 0.0500
 on every CV fold; the 0.071 on test is train→test shift across sequence-identity folds.
 It previously targeted the *pooled* FPR, a quantity this project never reports
-(RESULTS.md § 9.3).
+(RESULTS.md § 9.3). The residual overshoot was later traced to the rule itself rather than
+to transfer: a per-protein cutoff at the same target lands at 0.0502 (RESULTS.md § 10).
 
 The context draw is a much smaller source of uncertainty than the test set: over 12
 TabICL seeds on the corrected table the draw moves AUC by sd 0.0006 and AUPRC by sd
@@ -327,7 +357,8 @@ deploy/
 ├── ensemble_modal.py         ~28k fpocket runs, fanned out
 ├── esm_modal.py              ESM-2 embeddings + train-only PCA
 ├── context_bootstrap.py      context-seed variance for TabICL
-└── context_ensemble_modal.py multi-context averaging
+├── context_ensemble_modal.py multi-context averaging
+└── finetune_modal.py         tabicl[finetune] ceiling run → fine_tuned_tabicl/
 
 scripts/
 ├── fetch_cryptobench.py   annotations
@@ -346,6 +377,16 @@ figures/
 ├── make_deck.py               assembles them                → ../Cryptic_site_prediction_pipeline.pptx
 └── benchmark_comparison.html  interactive version; carries its OWN copy of the
                                benchmark values and of the model ladder
+
+fine_tuned_tabicl/         the fine-tuned run: results, paired zero-shot control,
+                           training curves, write-up
+
+operating_point/           per-protein decision rules: the pre-registration
+                           (frozen.json, committed before test was scored), the
+                           test table, paired bootstrap, CV-score provenance
+
+knob_sweep/                the TabICL constructor-knob sweep: per-config results
+                           on one CV fold, and why every one of them is a null
 
 tests/                     leakage guards, label logic, sampler invariants,
                            fpocket parsing, conservation join, ESM index bookkeeping
@@ -599,10 +640,14 @@ Modal client dropped its connection. Both are fixed and described in § 9.5.
 
 ## Deferred
 
-- **Fine-tuning** — `tabicl[finetune]` exists, but it forfeits the zero-training
-  property; if run, report beside the zero-shot number, never instead of it
 - **CryptoSite external test set** — `scripts/cryptosite_testset.py` builds the 14-pair
   held-out set (none of its apo structures appears in CryptoBench); scoring has not
   been run
 - **Side-chain and loop motion** — the one thing that plausibly moves the hard stratum,
   and the one thing harmonic ANM modes cannot produce
+
+The cheap levers are now exhausted. Weights (fine-tuning), inference knobs (the sweep)
+and the decision rule have all been measured; only the decision rule moved anything, and
+it moves no ranking metric. Widening the AUPRC gap needs better features, and the place
+they have to work is the already-open-pocket stratum — 4.4 % of test residues holding
+36 % of the positives, stuck at AUC 0.723 while bulk surface sits at 0.882.

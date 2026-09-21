@@ -747,15 +747,19 @@ and independently cross-checked against the ESM feature table, which had carried
 
 ## 8. Not measured
 
-- Fine-tuned TabICL (`tabicl[finetune]`) — deliberately out of scope; it would forfeit
-  the zero-training property that makes the comparison interesting.
+- ~~Fine-tuned TabICL~~: measured on 2026-09-16 and reported separately in
+  `fine_tuned_tabicl/README.md`, so the zero-shot record here is unchanged.
+  - Result: AUPRC 0.444 against 0.441 for a paired zero-shot control, a gain of +0.002
+    with a 95% CI of [−0.002, +0.007]. AUC is 0.863.
+  - The hard stratum does not move.
+- ~~A threshold that actually lands at 5 % FPR on test.~~ Measured on 2026-09-21 and
+  reported in § 10. A per-protein decision rule lands at **FPR 0.0502** without any
+  re-tuning on test; the global cutoff's 0.071 was a property of the *rule*, not an
+  irreducible transfer loss.
+- ~~TabICL's unset constructor arguments.~~ Swept on 2026-09-21, § 11. All null.
 - Fragment docking (CryptoSite's #3) — needs PatchDock + RankScore.
 - The CryptoSite 14-pair external test set — `scripts/cryptosite_testset.py` builds it
   (none of its apo structures appears in CryptoBench), but scoring has not been run.
-- A threshold that actually lands at 5 % FPR on test. The sweep hits 0.0500 on every
-  CV fold by construction (§ 9.3); the 0.071 on test is train→test shift across
-  sequence-identity folds, and nothing here corrects for it. Re-tuning on test would be
-  tuning on test.
 
 ---
 
@@ -921,3 +925,176 @@ Not scientific defects, but both could have corrupted results silently:
   server-side. All 60 jobs were submitted first try and ran to completion unattended.
   The `.map()` entrypoint is kept for interactive use; the deploy + spawn path is the
   one to use on a connection that cannot hold for an hour.
+
+---
+
+## 10. The decision rule, 2026-09-21
+
+§ 8 listed "a threshold that actually lands at 5 % FPR on test" as not measured. It is
+now measured, and the 0.071 turns out to have been a property of the decision *rule*
+rather than an irreducible train→test loss.
+
+**The diagnosis.** Every metric in this document is computed per protein and then
+averaged, but the rule was a single global cutoff shared by all 231 test proteins. Any
+between-protein shift in the score distribution therefore moves the realised FPR. Sweeping
+harder cannot fix that; the statistic being controlled and the statistic being reported
+are different objects.
+
+**The change.** Two per-protein rules, both expressed as a monotone per-protein
+*transform* of the score, after which the existing machinery applies unchanged —
+`choose_threshold` still selects on the CV folds, `summarise` still scores:
+
+- **rank** — `1 − (within-protein descending rank)/n`. A cutoff `t` on this is exactly
+  "flag the top `1 − t` of every protein".
+- **zscore** — `(s − mean_i)/sd_i` within each protein.
+
+No new selection code, no grid approximation: selection stays the same exact one-pass
+algorithm, and the global-threshold path reproduces the published 0.5706 to the digit,
+which is the check that this route matches the incumbent protocol.
+
+**What cannot move.** Per-protein AUC and AUPRC are rank statistics computed inside one
+protein, so they are invariant under any strictly monotone per-protein transform. The
+headline is arithmetically untouched — and it is, byte for byte, 0.8618362991984249 and
+0.44130501771474306 in every row below. `tests/test_operating_point.py` asserts this per
+protein rather than trusting the argument.
+
+### 10.1 Selection, on the CV folds only
+
+Per-fold threshold at the target mean per-protein FPR, frozen as the median of 4 —
+identical discipline to the incumbent.
+
+| rule | per-fold thresholds | frozen | operating point |
+|---|---|---|---|
+| global_threshold | 0.5896, 0.5433, 0.5825, 0.5586 | 0.5706 | `score ≥ 0.5706` |
+| rank | 0.9264, 0.9193, 0.9215, 0.9237 | 0.9226 | top 7.74 % per protein |
+| zscore | 2.0450, 1.9016, 1.9631, 2.0162 | 1.9897 | `z ≥ 1.9897` within protein |
+
+Nested leave-one-fold-out (select on 3 folds pooled, apply to the 4th) is the transfer
+estimate, and the only thing that chose which per-protein rule to report:
+
+| rule | FPR | TPR | MCC | F1 (weighted) |
+|---|---|---|---|---|
+| global_threshold | 0.0501 | 0.4386 | 0.3353 | 0.9194 |
+| rank | 0.0501 | 0.4374 | 0.3422 | 0.9196 |
+| **zscore** | 0.0500 | 0.4457 | **0.3456** | 0.9205 |
+
+CV fold prevalence is 0.0516–0.0550 against test's 0.0528, so the folds are not an
+unusually flattering match.
+
+### 10.2 Test, scored once
+
+| rule | | AUC | AUPRC | TPR | FPR | MCC | F1 | F1 (weighted) |
+|---|---|---|---|---|---|---|---|---|
+| global_threshold | headline | 0.862 | 0.441 | 0.559 | 0.071 | 0.374 | 0.379 | 0.912 |
+| rank | reference | 0.862 | 0.441 | 0.479 | 0.048 | 0.377 | 0.396 | 0.922 |
+| **zscore** | **secondary** | 0.862 | 0.441 | 0.499 | **0.050** | 0.380 | 0.395 | 0.921 |
+| pLM-NN | published | 0.86 | 0.36 | 0.48 | 0.05 | 0.39 | — | 0.92 |
+
+Full precision for the selected rule (`z ≥ 1.9896689080896004`): AUC 0.8618362991984249,
+AUPRC 0.44130501771474306, TPR 0.4994631502359641, FPR 0.05021823247775074,
+MCC 0.3803835194661635, F1 0.3945394161246145, F1-weighted 0.9211807704541123,
+ACC 0.916545166240146.
+
+**The target transfers.** 0.0502 against a 0.05 target, where the global cutoff
+overshoots to 0.0707.
+
+**Knowing the oracle bought nothing.** During scoping the rank rule's `q` was swept
+directly on test, which is a contamination the pre-registration exists to contain.
+Sweeping `z` on test gives 1.9923 against the CV-frozen 1.9897, for MCC 0.3805 vs 0.3804.
+The oracle rows are kept in `operating_point/result.json`, labelled as not results.
+
+### 10.3 Is it real? Paired bootstrap, 10,000 resamples
+
+Both arms score the same 231 proteins from the same scores, so the pairing cancels the
+dominant "which proteins are in the test set" variance. zscore minus global_threshold:
+
+| metric | Δ | 95 % CI | |
+|---|---|---|---|
+| FPR | **−0.0205** | [−0.0251, −0.0159] | significant |
+| F1 (positive) | **+0.0152** | [+0.0028, +0.0272] | significant |
+| F1 (weighted) | **+0.0090** | [+0.0061, +0.0119] | significant |
+| MCC | +0.0064 | [−0.0048, +0.0173] | **not** significant |
+| TPR | **−0.0598** | [−0.0786, −0.0414] | significant, against us |
+| AUC / AUPRC | +0.0000 | [+0.0000, +0.0000] | identical by construction |
+
+**This is a trade, not a free win.** The rule buys a real FPR reduction and real F1 gains
+and pays for them with real TPR. What makes it worth reporting is that the global rule was
+never *at* its intended operating point on test, so its higher TPR was bought with an FPR
+overshoot nobody chose. **MCC improves but not significantly, so it remains a loss against
+pLM-NN's 0.39 and is not claimed otherwise.**
+
+Against pLM-NN the secondary rule wins AUC, AUPRC, TPR and weighted F1, ties FPR and loses
+MCC — four, one and one, against the headline rule's three and three.
+
+**global_threshold stays the headline** so a reader can compare against the published
+table without taking the deviation on trust. The per-protein rule is named in advance in
+`operating_point/frozen.json`, committed before test was scored, and reported beside it —
+not substituted for it.
+
+Zero GPU: it reuses the stored per-residue scores from the run that produced the headline.
+Detail in `operating_point/README.md`.
+
+---
+
+## 11. TabICL's unset constructor arguments, 2026-09-21 — all null
+
+`model.py` passed 6 of `TabICLClassifier`'s 22 arguments; the other 16 sat at library
+defaults never checked against 117 features at 5.28 % prevalence. Nine were swept.
+**None helps.**
+
+Screened on **CV fold 0 only** — ranking nine configs against test and keeping the best is
+nine looks at the test set. The context seed is fixed at 0, so every comparison is paired
+and the § 4.6 context noise cancels rather than swamping the effect. The finalist was to
+be confirmed on folds 1–3 and scored on test once.
+
+**Determinism gate.** The control job's 75,800 fold-0 scores are elementwise identical
+(max abs diff 0.000e+00) to the run that produced the headline, so surfacing the knobs
+changed nothing and every delta is attributable to the knob alone.
+
+| config | AUPRC | ΔAUPRC | AUC | sec |
+|---|---|---|---|---|
+| est32_norm5 | 0.3782 | **+0.0023** | 0.8166 | 2642 |
+| kv_repr | 0.3759 | +0.0000 | 0.8148 | **416** |
+| control | 0.3759 | — | 0.8148 | 663 |
+| outlier8 | 0.3759 | −0.0000 | 0.8149 | 693 |
+| batch8 | 0.3758 | −0.0001 | 0.8148 | 662 |
+| norm4 | 0.3755 | −0.0004 | 0.8153 | 655 |
+| avg_probs | 0.3754 | −0.0005 | 0.8148 | 653 |
+| est32 | 0.3751 | −0.0008 | 0.8158 | 2545 |
+| norm5 | 0.3747 | −0.0012 | 0.8147 | 677 |
+| shuffle_random | 0.3744 | −0.0015 | 0.8147 | 668 |
+
+**The pre-registered bar was ΔAUPRC > +0.003 — the § 4.6 single-draw noise band, set
+before the run. Nothing met it, so nothing was promoted and the test split was never
+scored.** 10 jobs, 2.85 T4-hours, $1.68.
+
+What the nulls rule out:
+
+- **Ensemble width.** `n_estimators=32` gives −0.0008 for 4× the compute. The paper's
+  "8 estimators unlocks most of the benefits of ensembling" holds here, and the residue is
+  not small but absent.
+- **Preprocessor diversity.** Widening `norm_methods` from the default `['none','power']`
+  costs *nothing* (the member list is truncated to `n_estimators` either way) and still
+  loses: −0.0004 at four methods, −0.0012 at five. The default pair is not arbitrary.
+- **The heavy-tail hypothesis.** `outlier_threshold=8.0` was the most promising guess:
+  TabICL clips every feature at |z| > 4, and 64 of the 117 features are ESM-2 principal
+  components with heavy tails. It moves AUPRC by −0.0000. Whatever is out in those tails,
+  the model was not using it.
+- **Feature-shuffle scheme** (−0.0015) and **probability- vs logit-space averaging**
+  (−0.0005).
+
+**One keeper.** `kv_cache="repr"` is **37 % faster** (416 s vs 663 s) at unchanged
+metrics, by caching the context representation at `fit()` instead of re-forwarding all
+50,000 context rows for each of the ~6 protein chunks. It is **not** enabled by default:
+it is not bit-reproducible (max score drift 3.793e-03, from float accumulation order), so
+it must not be used to re-run anything that has to match the published record.
+
+**On est32_norm5.** It is the paper's own TALENT configuration, the only config pointing
+the right way, and it has the best AUC in the table. But +0.0023 is inside the noise band,
+on one fold, at 4× compute — and its 32-estimator sibling without the extra preprocessors
+came out at −0.0008, which is not how a real effect behaves. Under a bar set in advance it
+does not promote, and reporting it as a win after setting that bar is the selection the
+bar exists to prevent. If revisited, the test is folds 1–3 plus seeds at roughly $4, and
+the prediction to beat is that it regresses to zero.
+
+Detail in `knob_sweep/README.md`; grid in `deploy/knob_grid.py`.
