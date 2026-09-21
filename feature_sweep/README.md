@@ -5,7 +5,8 @@ Pre-registered in `deploy/feature_grid.py` (committed at `f01fe48`, before the
 screen ran); arms defined in `cryptic_tabicl/feature_sets.py`; run by
 `deploy/feature_sweep.py`.
 
-**Results are filled in below once the screen has run.**
+**Every one of the ten arms is negative.** Nothing was promoted and the test
+split was not scored. Run `fs_feat1`, 10 jobs, 1.88 T4-hours, **$1.11**.
 
 ## Why features, and why these features
 
@@ -139,6 +140,52 @@ Three things worth saying out loud, because they are all corrections:
    read that as settled.
 
 Nothing in the proxy clears the +0.003 bar, on any fold, for any arm.
+
+## Result — CV fold 0, control AUPRC 0.3759
+
+| arm | feat | AUPRC | ΔAUPRC | AUC | sec | prior |
+|---|---|---|---|---|---|---|
+| **control** | 117 | **0.3759** | — | 0.8148 | 660 | baseline |
+| `trim` | 93 | 0.3751 | −0.0008 | 0.8144 | 550 | low |
+| `pctx` | 125 | 0.3746 | −0.0013 | 0.8126 | 689 | medium |
+| `seqwin` | 130 | 0.3709 | −0.0050 | 0.8153 | 715 | **high** |
+| `esmnb` | 133 | 0.3708 | −0.0051 | 0.8123 | 716 | **high** |
+| `nbstat` | 132 | 0.3697 | −0.0062 | 0.8140 | 716 | medium |
+| `prel` | 129 | 0.3693 | −0.0066 | 0.8157 | 704 | low |
+| `free_combo` | 150 | 0.3689 | −0.0070 | 0.8135 | 848 | medium |
+| `esmsup32_seqwin_esmnb` | 114 | 0.3642 | −0.0117 | 0.8060 | 651 | **high** |
+| `esmsup32` | 85 | 0.3574 | −0.0185 | 0.8029 | 515 | **high** |
+
+**The determinism gate passed exactly**: the control's 75,800 fold-0 scores are
+elementwise identical to `build/cv_scores/k64_train-fold-0.json`, max abs diff
+**0.000e+00**, row order identical. Its 0.3759 / 0.8148 also reproduces the knob
+sweep's independent control. So the rebuilt table is the published table.
+
+`trim` and `pctx` are inside the 0.0015 single-draw noise band. Everything from
+`seqwin` down is 3–12× it, and these are paired comparisons in which the
+context-draw noise has already cancelled, so those losses are real.
+
+## What the result actually says
+
+**The feature-count story is dead.** The obvious reading — that we crossed
+TabICLv2's 100-feature pretraining maximum — has the wrong sign. The correlation
+between feature count and ΔAUPRC is **+0.33**: more features, *less* damage. The
+smallest arm (`esmsup32`, 85) is the worst; `free_combo` at 150 is mid-table.
+
+**A better feature made the model worse.** On the fold it was never fitted on,
+`esm_sup00` reaches AUC **0.7353** against `esm_pc00`'s 0.6729 — the strongest
+single ESM column this project has produced. Its arm loses 0.0185 AUPRC. The
+medians explain it: PLS *concentrates* label-covariance, so the median of its 32
+components is 0.5101, near noise; PCA *spreads* what it has, and the median of
+its 64 is 0.5235, higher than PLS's despite a much weaker best. TabICL ensembles
+over feature groups and evidently prefers many moderately-informative columns to
+one excellent column and a tail of noise. Supervision optimised the wrong
+objective — "predictive on its own, linearly" rather than "predictive".
+
+**Pooling is saturated, not missing.** The published 117 already carry 25
+neighbour-pooled columns at 8 Å. A second radius, a second statistic, and
+pooling the one family that had never been pooled all lose. The marginal view of
+a neighbourhood the model already sees costs more in redundancy than it pays.
 
 ## Files
 

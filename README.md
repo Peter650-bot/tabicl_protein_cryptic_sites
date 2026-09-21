@@ -87,6 +87,19 @@ heavy-tailed ESM components. One keeper: `kv_cache="repr"` runs 37 % faster at u
 metrics, though not bit-reproducibly. [`knob_sweep/README.md`](knob_sweep/README.md),
 RESULTS.md § 11.
 
+**More context per row does not help either (2026-09-21).** Ten feature sets were screened
+on one CV fold for $1.11: spatial neighbourhood pooling at a second radius and with
+second statistics, 5-residue sequence windows, protein-level aggregates, within-protein
+rank and z, a supervised PLS projection replacing the unsupervised pLM components, and
+dropping the 24 weakest of those components. **All ten are negative**, from −0.0008 to
+−0.0185, so nothing was promoted and test was never scored. Two findings are worth more
+than the null. The 100-feature pretraining maximum explains nothing — the correlation
+between feature count and ΔAUPRC is **+0.33**, and the *smallest* arm is the worst. And
+the supervised projection genuinely produced the strongest single pLM column this project
+has had (AUC 0.735 on the held fold against 0.673) while making the model **worse**,
+because PLS concentrates signal into a few components and leaves a tail of noise, where
+PCA spreads it. [`feature_sweep/README.md`](feature_sweep/README.md), RESULTS.md § 12.
+
 Only the CB-full row is comparable: our evaluation covers all 231 test proteins, whereas
 the published P2Rank and PocketMiner figures are on subsets those tools could run on.
 CB-P2RANK-apo (the 184 single-chain test structures) *is* reconstructible and we report
@@ -388,6 +401,9 @@ operating_point/           per-protein decision rules: the pre-registration
 knob_sweep/                the TabICL constructor-knob sweep: per-config results
                            on one CV fold, and why every one of them is a null
 
+feature_sweep/             the feature screen: ten arms on one CV fold, the free
+                           four-fold sklearn proxy, and why all ten are negative
+
 tests/                     leakage guards, label logic, sampler invariants,
                            fpocket parsing, conservation join, ESM index bookkeeping
 ```
@@ -646,8 +662,23 @@ Modal client dropped its connection. Both are fixed and described in § 9.5.
 - **Side-chain and loop motion** — the one thing that plausibly moves the hard stratum,
   and the one thing harmonic ANM modes cannot produce
 
-The cheap levers are now exhausted. Weights (fine-tuning), inference knobs (the sweep)
-and the decision rule have all been measured; only the decision rule moved anything, and
-it moves no ranking metric. Widening the AUPRC gap needs better features, and the place
-they have to work is the already-open-pocket stratum — 4.4 % of test residues holding
-36 % of the positives, stuck at AUC 0.723 while bulk surface sits at 0.882.
+The cheap levers are now exhausted, and that now includes features. Weights
+(fine-tuning), inference knobs (the sweep), the decision rule and ten feature sets have
+all been measured; only the decision rule moved anything, and it moves no ranking metric.
+
+What the feature screen adds is a sharper statement of where the remaining work is. It is
+not more context per residue — pooling, windows, protein aggregates and within-protein
+normalisation all lose, and the existing 8 Å neighbourhood mean is saturated rather than
+missing. It is not a better-compressed pLM either: supervising that projection produced a
+much stronger single column and a worse model. The place the work has to happen is still
+the already-open-pocket stratum — 4.4 % of test residues holding 36 % of the positives,
+stuck at AUC 0.723 while bulk surface sits at 0.882 — and what is missing there is a
+physical signal nothing in the current pipeline generates, most plausibly the side-chain
+and loop motion harmonic ANM modes cannot produce.
+
+One thing the screen leaves behind is worth more than its result: an arm is now a named
+column selection in `cryptic_tabicl/feature_sets.py` rather than a separate parquet, and
+`scripts/feature_proxy.py` scores every arm on all four folds for free. The next feature
+idea costs one line and $0.11 to screen. The proxy is worth running to catch a broken
+family and worth nothing as a predictor of which one wins — it ranked `prel` first on all
+four folds, and TabICL put it fourth from last.

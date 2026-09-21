@@ -757,6 +757,12 @@ and independently cross-checked against the ESM feature table, which had carried
   re-tuning on test; the global cutoff's 0.071 was a property of the *rule*, not an
   irreducible transfer loss.
 - ~~TabICL's unset constructor arguments.~~ Swept on 2026-09-21, § 11. All null.
+- ~~Whether more context per row helps: spatial and sequence neighbourhood pooling,
+  protein-level aggregates, within-protein normalisation, a supervised pLM projection,
+  and feature trimming.~~ Screened on 2026-09-21, § 12. **All ten arms are negative**;
+  the best non-control arm is −0.0008 and the worst is −0.0185. Adding context to the
+  row does not help this model, and the existing single 8 Å neighbourhood mean appears
+  to be saturated rather than missing.
 - Fragment docking (CryptoSite's #3) — needs PatchDock + RankScore.
 - The CryptoSite 14-pair external test set — `scripts/cryptosite_testset.py` builds it
   (none of its apo structures appears in CryptoBench), but scoring has not been run.
@@ -1098,3 +1104,226 @@ bar exists to prevent. If revisited, the test is folds 1–3 plus seeds at rough
 the prediction to beat is that it regresses to zero.
 
 Detail in `knob_sweep/README.md`; grid in `deploy/knob_grid.py`.
+
+---
+
+## 12. Feature engineering, 2026-09-21
+
+RESULTS.md § 8 ends with the verdict that the cheap levers are exhausted: weights
+(fine-tuning, +0.002 with a CI crossing zero), inference knobs (nine, all null) and the
+decision rule (a trade that moves no ranking metric) have all been measured. What is left
+is features, and features are where the measured leverage has always been — 33 → 117
+features moves AUPRC 0.343 → 0.441, while swapping the model moves at most 0.061.
+
+Everything still open against pLM-NN is a **ranking** problem. At a fixed 5 % FPR, MCC and
+TPR are functions of how well the scores rank, so the only thing that moves them is a
+better score. And the headroom has a known address: the already-open-pocket stratum is
+4.4 % of test residues but holds **36 % of all positives**, and sits at AUC 0.723 against
+bulk surface's 0.882.
+
+### 12.1 What kind of feature, and why
+
+The design follows a measurement rather than an intuition. **arXiv 2609.13202, "Do Tabular
+Foundation Models Still Need Feature Engineering?", tests 26 conditions on TabICLv2
+itself.** Its results on the model this project actually uses:
+
+| condition family | TabICLv2 classification, median effect |
+|---|---|
+| numeric interactions, group aggregation | **+0.00** macro-F1 (0 of 11 datasets positive) |
+| kNN-retrieval and out-of-fold prediction features | **+0.00** (2 of 16 combined positive) |
+| binning | −0.96 |
+| **feature selection** (variance, collinearity, PCA, supervised) | consistently harmful |
+
+Its conclusion is the sentence this section is built on: *"Feature engineering reorganizes
+information already present in the target data. Context augmentation can introduce new
+task relevant information... The improvement frontier may therefore be moving from
+representation engineering toward information augmentation."*
+
+That distinction has a concrete meaning here. A row is one residue, and the model cannot
+see the other residues of its own protein. So a neighbour's conservation, or a
+protein-level aggregate, or where this pocket ranks within this protein, is **not** a
+rearrangement of the row's own columns — it is a fact the row did not contain. Interactions
+are dead; context is not obviously dead. That is the hypothesis.
+
+Also worth recording, because it constrains how the feature count is read: **TabICLv2 was
+pretrained with "up to 100 features throughout all stages"** (paper, § 4.1), and this
+project runs 117. There is no cliff there — our own ladder has 117 beating 85
+(0.441 vs 0.434) — so the cap is soft, and feature-count reduction enters as a low-prior
+arm rather than a headline hypothesis.
+
+### 12.2 Three gaps, measured on the train split
+
+1. **The 64 ESM components get no neighbourhood pooling at all**, while all 53 other
+   features do. `features.AGGREGATED` covers 12 of 21 Tier A columns, and `ens_*` and
+   `cons_*` carry their own copies of the same 8 Å mean — but the pLM block arrives from a
+   GPU job that never sees a coordinate, so it was never pooled.
+2. **The unsupervised PCA basis spends its budget on directions the task does not use.**
+   24 of the 64 components have univariate |AUC − 0.5| ≤ 0.02 on train, and components
+   32–63 as a block are worth +0.007 AUPRC end to end against components 16–31's +0.023.
+3. **Sequence-window smoothing splits cleanly by family.** Sign-free pooled train AUC
+   (|AUC − 0.5| + 0.5, so an anti-correlated feature is not mistaken for a weak one):
+
+   | feature | raw | w5 | w11 | w21 |
+   |---|---|---|---|---|
+   | `cons_prob_self` | 0.625 | **0.651** | 0.647 | 0.616 |
+   | `cons_score` | 0.633 | **0.649** | 0.648 | 0.621 |
+   | `rsa` | 0.508 | 0.534 | **0.550** | 0.524 |
+   | `esm_pc01` | 0.564 | **0.616** | 0.598 | 0.577 |
+   | `esm_pc00` | **0.680** | 0.665 | 0.653 | 0.614 |
+   | `ens_mean` | **0.776** | 0.742 | 0.713 | 0.664 |
+
+   Windowing lifts the weakly-oriented, backbone-smooth signals and blurs the sharp one.
+   `ens_mean` asks whether *this* residue's pocket opens; a five-residue average of that is
+   a different and worse question. So `seqwin` covers everything except the `ens_*` family.
+
+   **A correction, since this table was first read wrong.** Read as raw AUC rather than
+   sign-free, `esm_pc00` appears to improve from 0.320 to 0.387 under a 21-residue window.
+   It does not: the component is anti-correlated with the label, so moving toward 0.5 is
+   moving toward chance. The same misreading made `rsa` and `protrusion` look like they
+   were hurt by windowing when they are helped. This is the fourth time a univariate
+   reading has misled this project.
+
+### 12.3 The arms
+
+Ten feature sets, each a column selection over one table, declared in
+`cryptic_tabicl/feature_sets.py` and pre-registered in `deploy/feature_grid.py`, committed
+at `f01fe48` before the screen ran.
+
+| arm | feat | what it adds |
+|---|---|---|
+| `control` | 117 | the published set; also the determinism gate |
+| `seqwin` | 130 | 5-residue backbone windows on everything except `ens_*` |
+| `esmnb` | 133 | 8 Å spatial mean of the 16 leading ESM components |
+| `nbstat` | 132 | neighbourhood spread and extreme at 8 Å, plus a 12 Å shell |
+| `pctx` | 125 | protein-level aggregates broadcast onto every row |
+| `prel` | 129 | within-protein rank and z of the six strongest columns |
+| `esmsup32` | 85 | 32 fold-nested PLS components **replace** the 64 PCs |
+| `esmsup32_seqwin_esmnb` | 114 | the supervised block plus both pooling families |
+| `free_combo` | 150 | `seqwin + pctx + prel` |
+| `trim` | 93 | drop the 24 ESM PCs at \|AUC − 0.5\| ≤ 0.02 on train |
+
+**Protocol.** Every arm on CV fold 0 and nothing else; seed 0 for all of them so the context
+draw is identical and each comparison is **paired**; scoring threshold-free. The bar was
+**ΔAUPRC > +0.003**, the § 4.6 single-draw band, the same bar the knob sweep used. Run
+`fs_feat1`, 10 jobs, **1.88 T4-hours, $1.11**.
+
+**Determinism gate — passed exactly.** The `control` arm's 75,800 fold-0 scores are
+elementwise identical to `build/cv_scores/k64_train-fold-0.json` from the headline run:
+**max abs diff 0.000e+00**, row order identical. Its AUPRC 0.3759 / AUC 0.8148 also
+reproduces the knob sweep's independent control. So the rebuilt, re-merged, re-ordered table
+is the published table, and every delta below is the new columns and nothing else.
+
+That gate is not a formality: TabICL's default `feat_shuffle_method="latin"` assigns features
+to groups by **position**, so a column reordering alone would have moved the scores while
+leaving every value in the table correct.
+
+### 12.4 Result — every arm is negative
+
+| arm | feat | AUPRC | ΔAUPRC | AUC | sec | prior set in advance |
+|---|---|---|---|---|---|---|
+| **control** | 117 | **0.3759** | — | 0.8148 | 660 | baseline |
+| `trim` | 93 | 0.3751 | −0.0008 | 0.8144 | 550 | low |
+| `pctx` | 125 | 0.3746 | −0.0013 | 0.8126 | 689 | medium |
+| `seqwin` | 130 | 0.3709 | −0.0050 | 0.8153 | 715 | **high** |
+| `esmnb` | 133 | 0.3708 | −0.0051 | 0.8123 | 716 | **high** |
+| `nbstat` | 132 | 0.3697 | −0.0062 | 0.8140 | 716 | medium |
+| `prel` | 129 | 0.3693 | −0.0066 | 0.8157 | 704 | low |
+| `free_combo` | 150 | 0.3689 | −0.0070 | 0.8135 | 848 | medium |
+| `esmsup32_seqwin_esmnb` | 114 | 0.3642 | −0.0117 | 0.8060 | 651 | **high** |
+| `esmsup32` | 85 | 0.3574 | −0.0185 | 0.8029 | 515 | **high** |
+
+**Nothing cleared the bar; nothing was promoted; the test split was not scored.** Not one arm
+is even positive. The two closest to neutral, `trim` (−0.0008) and `pctx` (−0.0013), are
+inside the noise band; everything from `seqwin` down is 3–12× the 0.0015 single-draw sd, and
+these are paired comparisons, so the context-draw noise has already been cancelled. The
+losses are real.
+
+This is a stronger statement than the knob sweep's. There, nine changes did nothing. Here,
+**adding context to the row actively hurts**, and the more context is added the worse it gets.
+
+### 12.5 Two mechanisms, and one hypothesis killed
+
+**The feature-count story is dead.** The obvious reading — that we crossed TabICLv2's
+100-feature pretraining maximum — does not survive the data. The correlation between feature
+count and ΔAUPRC is **+0.33**, i.e. *more* features go with *less* damage, which is the wrong
+sign for a capacity argument. The **smallest** arm, `esmsup32` at 85 features, is the
+**worst** at −0.0185, and `free_combo` at 150 is mid-table. What is in the columns matters;
+how many there are does not.
+
+**A better feature made the model worse, and that is the interesting result.** The supervised
+projection worked exactly as intended — on the fold it was never fitted on, `esm_sup00`
+reaches AUC **0.7353**, against `esm_pc00`'s 0.6729. It is the single strongest ESM column
+this project has ever had. The arm built on it loses 0.0185 AUPRC.
+
+The explanation is in the medians. PLS **concentrates** label-covariance into its leading
+components, so the median of its 32 is 0.5101 — 31 of the 32 are close to noise. PCA
+**spreads** what it has: the median of its 64 is 0.5235, higher than PLS's, even though its
+best is much weaker. TabICL ensembles over feature groups formed by circular shifts, and it
+evidently does better with many moderately-informative columns than with one excellent column
+and a tail of noise. Supervising the projection optimised the wrong objective: not "is this
+direction predictive" but "is this direction predictive *on its own, linearly*".
+
+**Per-row context pooling is real information and still does not help.** This was the
+hypothesis the whole section was built on, taken from arXiv 2609.13202's conclusion that the
+frontier has moved toward information augmentation. A neighbour's conservation genuinely is
+not in the row. It is still worth −0.005. The likeliest reason is that the information was
+already there: the published 117 already contain 25 neighbour-pooled columns at 8 Å, so
+`nbstat` and `esmnb` are adding a *second* view of a neighbourhood the model already sees,
+and the marginal view costs more in redundancy than it pays in signal.
+
+### 12.6 What this rules out
+
+- **Neighbourhood pooling is saturated**, not missing. A second radius (12 Å), a second
+  statistic (std, max) and pooling the one family that had never been pooled (the pLM block)
+  all lose. The existing single 8 Å mean is enough.
+- **Sequence-window smoothing does not transfer from univariate to multivariate.** It lifts
+  `cons_prob_self` 0.625 → 0.651 and `esm_pc01` 0.564 → 0.616 on its own, and costs 0.0050
+  AUPRC in the model.
+- **Within-protein normalisation does not help the model**, even though the *decision rule*
+  built on exactly that transform is what fixed the FPR (§ 10). Rank and z are the right thing
+  to do to a score and the wrong thing to do to a feature.
+- **Supervising the pLM projection is worse than not supervising it**, at every level: −0.0185
+  alone, −0.0117 combined with the pooling families.
+- **Feature selection loses, as predicted.** `trim` (−0.0008) is the user-facing answer to
+  "would removing features help": no, and arXiv 2609.13202 said so in advance.
+
+### 12.7 The proxy, and what it was worth
+
+Every arm was first scored with logistic regression on all four folds, free, before anything
+was paid for (`scripts/feature_proxy.py`, `feature_sweep/sklearn_proxy*.json`). It called the
+**direction** right — nothing cleared the bar there either — and the **ordering** badly wrong:
+
+| arm | proxy ΔAUPRC (4-fold mean) | TabICL ΔAUPRC (fold 0) |
+|---|---|---|
+| `prel` | **+0.0019**, positive on all four folds | **−0.0066** |
+| `nbstat` | +0.0008, positive on all four folds | −0.0062 |
+| `esmnb` | +0.0004 | −0.0051 |
+| `trim` | −0.0026 | **−0.0008**, the best non-control arm |
+| `esmsup32` | −0.0163 | −0.0185 |
+
+`prel` is the clearest case: the most consistent winner under the proxy, on all four folds,
+and the fourth-worst arm under TabICL. **A cheap model's feature ranking does not transfer to
+TabICL** — which is the same lesson § 4.3 and § 4.3b record for univariate screening, now
+established for a multivariate proxy too. The proxy is worth running to catch a broken family,
+and is worth nothing as a predictor of which family wins.
+
+It did earn its keep once: `esmsup32` loses under logistic regression, the model PLS optimises
+its components *for*, which was the first sign that the supervised projection was the wrong
+idea rather than a promising one.
+
+### 12.8 Cost, and what was kept
+
+$1.11 of T4 for the screen, plus about $0.30 for the CPU job that built the PLS blocks. The
+test split was never touched. Everything else — 381,704 residue centroids, five derived
+families, the `derive` and `feature_sets` modules, the four-fold proxy — is local CPU and
+cost nothing.
+
+What survives is infrastructure rather than a number. `derive.spatial_pool` replaces three
+near-identical private copies of the same loop and reproduces all 22 published `_nb8` columns
+elementwise (max abs diff 5.7e-14), including the case the three copies disagreed on. An arm
+is now a named column selection rather than a separate parquet, so the next feature idea costs
+one line in `feature_sets.py` and $0.11 to screen — against the day of pipeline work it cost
+before.
+
+Detail in `feature_sweep/README.md`; grid in `deploy/feature_grid.py`; arms in
+`cryptic_tabicl/feature_sets.py`.
