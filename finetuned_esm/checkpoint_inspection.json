@@ -1,0 +1,115 @@
+{
+ "class": "s2p_models.MultitaskFinetunedEsmModel",
+ "pickle_globals": [
+  "__builtin__.set",
+  "collections.OrderedDict",
+  "finetuning_utils.MultitaskFinetunedEsmModel",
+  "torch.HalfStorage",
+  "torch.LongStorage",
+  "torch._utils._rebuild_parameter",
+  "torch._utils._rebuild_tensor_v2",
+  "torch.float32",
+  "torch.nn.modules.activation.Sigmoid",
+  "torch.nn.modules.activation.Tanh",
+  "torch.nn.modules.container.ModuleList",
+  "torch.nn.modules.dropout.Dropout",
+  "torch.nn.modules.linear.Linear",
+  "torch.nn.modules.normalization.LayerNorm",
+  "torch.nn.modules.sparse.Embedding",
+  "transformers.models.esm.configuration_esm.EsmConfig",
+  "transformers.models.esm.modeling_esm.EsmAttention",
+  "transformers.models.esm.modeling_esm.EsmContactPredictionHead",
+  "transformers.models.esm.modeling_esm.EsmEmbeddings",
+  "transformers.models.esm.modeling_esm.EsmEncoder",
+  "transformers.models.esm.modeling_esm.EsmIntermediate",
+  "transformers.models.esm.modeling_esm.EsmLayer",
+  "transformers.models.esm.modeling_esm.EsmModel",
+  "transformers.models.esm.modeling_esm.EsmOutput",
+  "transformers.models.esm.modeling_esm.EsmPooler",
+  "transformers.models.esm.modeling_esm.EsmSelfAttention",
+  "transformers.models.esm.modeling_esm.EsmSelfOutput",
+  "transformers.models.esm.modeling_esm.RotaryEmbedding"
+ ],
+ "n_params": 2841634724,
+ "dtypes": [
+  "torch.float16"
+ ],
+ "non_layer_param_shapes": {
+  "llm.embeddings.word_embeddings.weight": [
+   33,
+   2560
+  ],
+  "llm.embeddings.position_embeddings.weight": [
+   1026,
+   2560
+  ],
+  "llm.encoder.emb_layer_norm_after.weight": [
+   2560
+  ],
+  "llm.encoder.emb_layer_norm_after.bias": [
+   2560
+  ],
+  "llm.pooler.dense.weight": [
+   2560,
+   2560
+  ],
+  "llm.pooler.dense.bias": [
+   2560
+  ],
+  "llm.contact_head.regression.weight": [
+   1,
+   1440
+  ],
+  "llm.contact_head.regression.bias": [
+   1
+  ],
+  "classifier.weight": [
+   1,
+   2560
+  ],
+  "classifier.bias": [
+   1
+  ],
+  "plDDT_regressor.weight": [
+   1,
+   2560
+  ],
+  "plDDT_regressor.bias": [
+   1
+  ],
+  "distance_regressor.weight": [
+   1,
+   2560
+  ],
+  "distance_regressor.bias": [
+   1
+  ]
+ },
+ "n_encoder_layers": 36,
+ "hidden_size": 2560,
+ "forward_head_shapes": [
+  [
+   1,
+   68,
+   1
+  ],
+  [
+   1,
+   68,
+   1
+  ],
+  [
+   1,
+   68,
+   1
+  ]
+ ],
+ "seq_len": 66,
+ "head0_probs_first5": [
+  0.12226235866546631,
+  0.21452783048152924,
+  0.12537966668605804,
+  0.15837714076042175,
+  0.3170139491558075
+ ]
+}

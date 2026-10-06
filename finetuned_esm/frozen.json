@@ -1,0 +1,31 @@
+{
+ "frozen": "2026-10-06",
+ "status": "pre-registered; no blend has been scored on any split",
+ "what_was_already_seen": "Both components' test results (PLAN.md steps 5-6). The two blends below were named in PLAN.md step 7 before either was scored; this file fixes their exact definitions and the decision rule.",
+ "inputs": {
+  "tabicl": "build/modal_result_esm64.json scores (zero-shot TabICLv2, 117 features, headline run)",
+  "s2p": "build/s2p_scores_keyed.parquet s2p_score (released cbs-model.pt, run s2p_20261006)",
+  "join": "row-for-row on the test split; apo_id, chain, seq_id and label asserted identical"
+ },
+ "blends": {
+  "rank": {
+   "definition": "0.5 * r_tabicl + 0.5 * r_s2p, where r is the within-protein percentile rank: scipy.stats.rankdata(score, method='average') / n_residues_in_protein",
+   "role": "primary"
+  },
+  "prob": {
+   "definition": "0.5 * tabicl_score + 0.5 * s2p_score (both probabilities in [0, 1])",
+   "role": "secondary"
+  }
+ },
+ "nothing_fitted": "Weights are fixed at 0.5 / 0.5. No parameter is chosen on any data.",
+ "metrics": {
+  "result": "AUC and AUPRC, per protein (mean over proteins) and pooled, on CB-full (231) and CB-P2RANK-apo (184)",
+  "approximate_only": "TPR, FPR, MCC, F1_weighted at 'flag the top 7.74 % of each protein' (the rank rule frozen on CV for TabICL in operating_point/frozen.json); labelled approximate because that operating point was not chosen for a blend"
+ },
+ "comparisons": "Paired bootstrap over proteins, same resample for every arm: blend minus s2p alone, and blend minus TabICL alone. 10,000 resamples per-protein, 2,000 pooled, seed 0.",
+ "decision_rule_for_step_8": {
+  "primary": "rank blend minus s2p alone, per-protein AUPRC on CB-full: paired 95 % CI entirely above zero",
+  "secondary": "prob blend minus s2p alone, pooled AUPRC on CB-P2RANK-apo: paired 95 % CI entirely above zero",
+  "consequence": "If either passes, out-of-fold stacking (step 8) is proposed for the user's go-ahead. If neither passes, it is not proposed. Two tests are run; that is stated with the result."
+ }
+}

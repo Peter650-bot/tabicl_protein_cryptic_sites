@@ -1,0 +1,74 @@
+{
+ "n_table_residues": 381704,
+ "n_their_residues": 381757,
+ "duplicate_keys_in_their_sequences": 2,
+ "matched": 381704,
+ "ours_without_their_position": {
+  "n": 0,
+  "by_split": {},
+  "positives": 0,
+  "by_resname": {},
+  "n_structures": 0
+ },
+ "theirs_without_our_row": {
+  "n": 53,
+  "by_resname": {
+   "GLY": 5,
+   "SAH": 5,
+   "TRP": 4,
+   "UNK": 4,
+   "PRO": 3,
+   "ONL": 2,
+   "PR3": 2,
+   "TYI": 2,
+   "THR": 2,
+   "DGL": 2,
+   "HS8": 2,
+   "HIS": 2,
+   "MET": 2,
+   "CSR": 1,
+   "HTI": 1
+  },
+  "n_structures": 39
+ },
+ "aa_letter_mismatch_on_matched": {
+  "n": 8,
+  "pairs": {
+   "CYS->CSS": 3,
+   "LYS->KPI": 2,
+   "LYS->MLZ": 1,
+   "MET->MHO": 1,
+   "SER->SAC": 1
+  }
+ },
+ "chains_over_their_max_length": [
+  "2po4A/A",
+  "6j35B/B",
+  "6kqfC-D/C",
+  "6kqfC-D/D",
+  "7oumC/C"
+ ],
+ "their_test_file": {
+  "n_entries": 184,
+  "n_over_max_length (they skip)": 0,
+  "n_residues": 55572,
+  "n_positive_by_their_labels": 3158,
+  "paper_reports": {
+   "structures": 184,
+   "residues": 55572,
+   "binding": 3158
+  },
+  "apo_ids_absent_from_our_table": [],
+  "label_disagreement_vs_ours": {
+   "their1_our0": 0,
+   "their0_our1": 0,
+   "no_our_row": 5
+  },
+  "vs_our_CB_P2RANK_apo": {
+   "ours": 184,
+   "theirs": 184,
+   "only_ours": [],
+   "only_theirs": []
+  }
+ }
+}
