@@ -1,0 +1,116 @@
+{
+ "run_id": "s2p_full_20261006",
+ "name": "exact_all",
+ "by_fold": [
+  {
+   "fold": "test",
+   "multichain": false,
+   "n": 193,
+   "pp_AUC": 0.8462,
+   "pp_AUPRC": 0.4861,
+   "pooled_AUC": 0.8917,
+   "pooled_AUPRC": 0.4937
+  },
+  {
+   "fold": "test",
+   "multichain": true,
+   "n": 38,
+   "pp_AUC": 0.8119,
+   "pp_AUPRC": 0.273,
+   "pooled_AUC": 0.8416,
+   "pooled_AUPRC": 0.189
+  },
+  {
+   "fold": "train-fold-0",
+   "multichain": false,
+   "n": 187,
+   "pp_AUC": 0.9378,
+   "pp_AUPRC": 0.6447,
+   "pooled_AUC": 0.9603,
+   "pooled_AUPRC": 0.6808
+  },
+  {
+   "fold": "train-fold-0",
+   "multichain": true,
+   "n": 36,
+   "pp_AUC": 0.7602,
+   "pp_AUPRC": 0.1816,
+   "pooled_AUC": 0.8269,
+   "pooled_AUPRC": 0.1322
+  },
+  {
+   "fold": "train-fold-1",
+   "multichain": false,
+   "n": 199,
+   "pp_AUC": 0.9454,
+   "pp_AUPRC": 0.6615,
+   "pooled_AUC": 0.9665,
+   "pooled_AUPRC": 0.711
+  },
+  {
+   "fold": "train-fold-1",
+   "multichain": true,
+   "n": 29,
+   "pp_AUC": 0.7658,
+   "pp_AUPRC": 0.3038,
+   "pooled_AUC": 0.8277,
+   "pooled_AUPRC": 0.2202
+  },
+  {
+   "fold": "train-fold-2",
+   "multichain": false,
+   "n": 195,
+   "pp_AUC": 0.9384,
+   "pp_AUPRC": 0.6485,
+   "pooled_AUC": 0.96,
+   "pooled_AUPRC": 0.6954
+  },
+  {
+   "fold": "train-fold-2",
+   "multichain": true,
+   "n": 31,
+   "pp_AUC": 0.8515,
+   "pp_AUPRC": 0.2807,
+   "pooled_AUC": 0.886,
+   "pooled_AUPRC": 0.2483
+  },
+  {
+   "fold": "train-fold-3",
+   "multichain": false,
+   "n": 201,
+   "pp_AUC": 0.9251,
+   "pp_AUPRC": 0.6234,
+   "pooled_AUC": 0.9533,
+   "pooled_AUPRC": 0.6648
+  },
+  {
+   "fold": "train-fold-3",
+   "multichain": true,
+   "n": 27,
+   "pp_AUC": 0.8091,
+   "pp_AUPRC": 0.269,
+   "pooled_AUC": 0.8422,
+   "pooled_AUPRC": 0.2409
+  }
+ ],
+ "their_test_pooled": {
+  "AUC": 0.8928340119040078,
+  "AUPRC": 0.49934658065059184
+ },
+ "gate": {
+  "recipe": "full",
+  "their_test_pooled": {
+   "AUC": 0.8928340119040078,
+   "AUPRC": 0.49934658065059184
+  },
+  "target": {
+   "AUC": 0.8935,
+   "AUPRC": 0.4752
+  },
+  "tolerance": {
+   "AUC": 0.015,
+   "AUPRC": 0.03
+  },
+  "passes": true
+ }
+}

@@ -1,0 +1,29 @@
+{
+ "n_extracted": 11905,
+ "checkpoints": {
+  "base-finetuned-model.pt": {
+   "bytes": 5686206347,
+   "sha256": "7d0697a6752698658463b9b656a58b4e0a148d809aa7359323cb4e30f6728ff3"
+  },
+  "multitask-finetuned-model.pt": {
+   "bytes": 5686710434,
+   "sha256": "8dff42f7559d7e9a0ff3e7db6dc44ec4b12f799d893cc6a4d24a0bfd53d86653"
+  },
+  "GAT.pt": {
+   "bytes": 16773632,
+   "sha256": "a665a526b15a5cc03d0eb4a61374fd4097548780405439c4ba809938f533bded"
+  },
+  "baseline-model.pt": {
+   "bytes": 3155220,
+   "sha256": "1e67ea69a8012fdb4235e8dc48a788a35744e0f96aa6d573becbd2742a034786"
+  },
+  "multitask-finetuned-model-with-ligysis.pt": {
+   "bytes": 5691994704,
+   "sha256": "d2db206dd85254a5d2404d4ccf8a1b99aea9952bfb0baaad19428eac6c970dac"
+  },
+  "multitask-finetuned-model-with-CNN-with-ligysis.pt": {
+   "bytes": 5693005585,
+   "sha256": "03db8f78a8825128bb93c425e197d3f36c2a2384996ca5a4852954152df44753"
+  }
+ }
+}

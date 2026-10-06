@@ -33,7 +33,10 @@ import sys
 
 import modal
 
-TABLE_LOCAL = os.path.expanduser("~/cryptobench_stage/tables/residues_s2p.parquet")
+# Step 8 runs on residues_s2p.parquet; step 9 on residues_s2pfull.parquet (a superset).
+# Chosen at deploy time:  S2P_STACK_TABLE=residues_s2pfull.parquet modal deploy ...
+TABLE_NAME = os.environ.get("S2P_STACK_TABLE", "residues_s2p.parquet")
+TABLE_LOCAL = os.path.expanduser(f"~/cryptobench_stage/tables/{TABLE_NAME}")
 if modal.is_local() and not os.path.exists(TABLE_LOCAL):
     raise SystemExit(f"missing {TABLE_LOCAL}: run scripts/s2p_build_stack_table.py")
 
@@ -44,7 +47,9 @@ SEED, BUDGET = 0, 50_000
 FOLDS = [f"train-fold-{h}" for h in range(4)]
 STAGES = {"gate": (["control"], ["train-fold-0"]),
           "cv": (["s2p_117", "s2p_53"], FOLDS),
-          "test": (["s2p_117", "s2p_53"], [None])}
+          "test": (["s2p_117", "s2p_53"], [None]),
+          "cv_full": (["s2pfull_117", "s2pfull_53"], FOLDS),
+          "test_full": (["s2pfull_117", "s2pfull_53"], [None])}
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -151,8 +156,8 @@ def main(stage: str = "", run_id: str = "", collect: bool = False):
     if stage not in STAGES:
         raise SystemExit(f"--stage must be one of {sorted(STAGES)}")
     names, folds = STAGES[stage]
-    jobs = [{"name": n, "held": h, "budget": BUDGET, "seed": SEED, "run_id": run_id}
-            for n in names for h in folds]
+    jobs = [{"name": n, "held": h, "budget": BUDGET, "seed": SEED, "run_id": run_id,
+             "table": TABLE_NAME} for n in names for h in folds]
     tags = [job_tag(j) for j in jobs]
     assert len(set(tags)) == len(tags), "job tags collide"
     # Spawned on the deployed app: this host drops long client streams.

@@ -104,6 +104,9 @@ plus LIGYSIS minus a hard-coded list of 46 UniProt IDs.
 - **CryptoBench part: verified.** test.json (222 entries) vs train folds 0–3 (885): zero
   shared apo IDs, zero shared UniProt IDs (222 vs 888). All 231 of our test structures
   come from test.json.
+- **LIGYSIS part: inferred, not verified — and the inference was WRONG (see 9b).** Their
+  actual LIGYSIS training list still contains 28 CryptoBench test proteins by UniProt.
+  Original text kept below for the record.
 - **LIGYSIS part: inferred, not verified.** The 46 excluded IDs are all human; 9 are exact
   CryptoBench test UniProts (P18669, O75530, P50053, P14207, P17900, P12004, O43924,
   Q9BYC5, P15121) and the rest are in test-set families (AKR1, enolase, LDH, pyruvate kinase,
@@ -311,3 +314,209 @@ as TabICL's own CV folds do (0.376–0.442 vs 0.441 on test): fold difficulty, n
 - **Pre-registration** `frozen_step8.json`, sha256 `205e34cb4f2e77bd9a6f78fa8b84343a673183e2b4b63caa8fe8ec4c6f0ac8e2`: arms, threshold protocol,
   references (TabICL-117, the plain model alone, the fixed rank blend of the two), metrics,
   and four claims with their criteria. Waiting on a commit before the CV and test stages run.
+
+### 8f — SCORED ONCE, 2026-10-06
+`deploy/s2p_stack.py` run `st1` (10 T4 jobs, ≈ 1.5 GPU-h, ≈ $0.90), reported by
+`scripts/s2p_stack_report.py` → `step8_thresholds.json` (written before test was read)
+and `step8_result.json`. Checks: the TabICL-117 column reproduces the headline exactly;
+the plain model alone reproduces 8c (pooled 0.887 / 0.440 on the 184).
+
+| CB-full (231) | s2p_117 | s2p_53 | TabICL-117 | plain alone | fixed blend |
+|---|---|---|---|---|---|
+| per-protein AUC | **0.869** | 0.870 | 0.862 | 0.838 | 0.864 |
+| per-protein AUPRC | **0.461** | 0.454 | 0.441 | 0.424 | 0.464 |
+| pooled AUC | **0.898** | 0.896 | 0.885 | 0.876 | 0.882 |
+| pooled AUPRC | **0.396** | 0.381 | 0.360 | 0.371 | 0.359 |
+
+| CB-P2RANK-apo (184) | s2p_117 | s2p_53 | TabICL-117 | plain alone | fixed blend |
+|---|---|---|---|---|---|
+| per-protein AUPRC | **0.496** | 0.490 | 0.469 | 0.454 | 0.493 |
+| pooled AUC | **0.900** | 0.899 | 0.883 | 0.887 | 0.886 |
+| pooled AUPRC | **0.447** | 0.439 | 0.398 | 0.440 | 0.404 |
+
+**Pre-registered claims** (per-protein AUPRC, CB-full, paired 95 % CI):
+- **Primary PASSES:** s2p_117 − plain alone **+0.036 [+0.021, +0.052]**. Stacking beats the
+  fine-tuned model it stacks.
+- **Secondary 1 PASSES:** s2p_117 − TabICL-117 **+0.019 [+0.007, +0.031]**.
+- **Secondary 2 does not pass:** s2p_117 − fixed rank blend −0.004 [−0.014, +0.007]. Per
+  protein, learning the combination is no better than the fixed 50/50. Reported, not
+  claimed: on *pooled* metrics the stack does beat the fixed blend (AUPRC +0.037
+  [+0.010, +0.064], AUC +0.015 [+0.010, +0.020]) — a within-protein rank blend discards
+  cross-protein scale by construction.
+- **Secondary 3 does not pass:** s2p_117 − s2p_53 +0.006 [−0.001, +0.013]. Once the score
+  is present, the 64 frozen ESM PCs add nothing resolvable per protein (pooled AUPRC on
+  CB-full: +0.015 [+0.004, +0.026], not the claim metric).
+- Against the papers' number (pooled AUPRC, 184): the stack 0.447 vs the plain model 0.440,
+  +0.007 [−0.022, +0.035]; the released multitask+LIGYSIS model scored 0.475 (step 5).
+
+**Threshold transfer failed.** Every CV fold lands at FPR 0.0500; test lands at **0.098**
+(TPR 0.661, MCC 0.390 vs TabICL-117's 0.374 at FPR 0.071). Cause, measured: model `all`'s
+scores on test sit higher than the fold models' scores on their held-out folds (negatives'
+mean 0.296 vs 0.20–0.27; 21.5 % of negatives > 0.5 vs 11–17 %; positives 0.743 vs
+0.58–0.68). TabICL learned the feature's scale from fold-model context, so its test
+outputs shift up (negatives' mean 0.187 vs 0.11–0.13 in CV). Whether the shift comes from
+the fourth fold of data or from run-to-run calibration of a single fp16 fine-tune can't be
+separated — the four fold models already differ among themselves. AUC/AUPRC are threshold-
+free and unaffected by the operating point; the scale mismatch may make the ranking gains
+slightly conservative rather than inflated.
+
+## Step 9 — the full recipe (multitask + LIGYSIS), 2026-10-06
+
+The authors replied with their data: `cbs-finetuning-data.tar.gz` (26.1 GB, owncloud share
+from Vít Škrhák). The user chose to go straight to the full recipe (skipping the 8f
+threshold fix) and to commit at the end; pre-registrations are therefore pinned by
+sha256 in this log before anything they govern is scored.
+
+- **9a. Fetch and inventory.** Download inside Modal; record sha256 and the member list.
+  *Gate:* the files their notebooks name are present (CryptoBench train/test, LIGYSIS
+  train, pLDDT, residue distances), or the gap is named.
+- **9b. Verify their data against ours.** Their CryptoBench train/test files must match
+  our rebuilds (8a, step 3) residue for residue. Re-run step 2's LIGYSIS check with their
+  actual LIGYSIS training list. *Gate:* exact match, or every difference explained; no
+  CryptoBench test protein in their training data.
+- **9c. Recipe.** Read the exact multitask + LIGYSIS training procedure from their code.
+  *Gate:* every hyperparameter and stage traced to a line of theirs.
+- **9d. Pilot, then reproduction.** Model `all` with the full recipe must reproduce the
+  released model: pooled 0.8935 / 0.4752 on the 184. Tolerance fixed before training:
+  ±0.015 AUC, ±0.03 AUPRC.
+- **9e. Four fold models**; held-out folds must score like unseen data.
+- **9f. Stack**, pre-registered as in step 8 (same arms, references, claims), scored once.
+
+### 9a — PASSED, 2026-10-06
+`cbs-finetuning-data.tar.gz`: 28.07 GB, 15,097 members, sha256 `12b06f2c…ffd41`
+(`full_archive_manifest.json`). Holds CryptoBench `train.txt` / `test.txt` with pLDDT and
+residue distances (946 proteins), LIGYSIS `train.txt` with pLDDT (3,007), and their trained
+checkpoints. Their `multitask-finetuned-model-with-ligysis.pt` has sha256 `d2db206d…0dac`
+— byte-identical to the HuggingFace `cbs-model.pt` reproduced in step 4.
+
+### 9b — data verified; a test leak found in their recipe, 2026-10-06
+- **Their CryptoBench files equal our rebuilds exactly**: test 184 entries / 55,572
+  residues / 3,158 positives, train 762 / 233,435 / 13,342 — every sequence and label.
+- **LIGYSIS vs CryptoBench** (`scripts/s2p_ligysis_overlap.py`; their loader's filters
+  applied first, 2,614 LIGYSIS proteins trained on; 5-mer screen then BLOSUM62 local
+  alignment, coverage ≥ 50 %):
+
+  | | proteins | exact UniProt in LIGYSIS | ≥ 90 % identity | ≥ 40 % identity |
+  |---|---|---|---|---|
+  | test | 231 | 28 | 25 | 38 |
+  | train folds 0–3 | 223–228 each | 36–42 | 36–42 | 54–62 |
+
+- **This is test-label leakage in the released model.** For the 25 near-identical test
+  proteins, 238 of 377 cryptic residues (63 %) are labelled binding in LIGYSIS training;
+  for 16 of the 25 essentially all are (`step9b_test_label_leak.csv`). Both datasets take
+  sites from ligand-bound PDB entries, so these labels are the test labels.
+- **Measured impact is small** (`step9b_leak_impact.json`). Per-protein AUPRC, released vs
+  plain fine-tune (which never saw LIGYSIS): leaked 25 — 0.475 vs 0.475, −0.000
+  [−0.054, +0.057]; clean 206 — 0.442 vs 0.418, +0.024 [+0.011, +0.039]. LIGYSIS's benefit
+  is real and sits on clean proteins; n = 25 cannot exclude a ~0.05 leak effect. The
+  leaked proteins are easy for the fine-tuned models and hard for TabICL: dropping them,
+  pooled AUPRC on the 184 goes released 0.475 → 0.461, TabICL 0.398 → 0.411, and the gap
+  from 0.077 to 0.050.
+- **Consequence for step 9.** Two versions of the full recipe:
+  - *exact* — their LIGYSIS list as-is: the 9d reproduction gate only.
+  - *clean* — each model's LIGYSIS stage also drops every LIGYSIS protein ≥ 40 % identical
+    (coverage ≥ 50 %) to any protein that model scores held-out: model `all` → test,
+    fold model h → fold h. Used for stacking. Same rule for context and test, and no
+    model ever saw a protein it scores.
+
+### 9c — DONE, 9d pilot PASSED, 2026-10-06
+`deploy/s2p_finetune_modal.py::finetune_full` runs cell 16 of their `train.ipynb` with
+their `finetuning_utils.py` vendored verbatim (`deploy/finetuning_utils.py`, commit
+`7be0c676`). Traced: stage A LIGYSIS, 4 epochs, `llm` frozen in epochs 0–1, BCE + pLDDT MSE;
+stage B CryptoBench, new optimizer, 3 epochs, `llm`/`classifier`/`plDDT` frozen in epochs
+0–1 (only the distance head trains), BCE + distance MSE + pLDDT MSE, scalers refit on the
+job's train file. Pilot (20 + 20 proteins, all 7 epochs): losses fall in both stages
+(1.17 → 0.94; 1.35 → 1.20), none non-finite, peak 24.9 GB, LIGYSIS filter applied
+(18 of 20 kept). Projected ≈ 40 min, ≈ $1.70 per job. LIGYSIS exclusion lists for the clean
+variant: `ligysis_exclusions.json` (test 57; folds 80–97 of 2,614).
+
+### 9f — PRE-REGISTERED, 2026-10-06 (before any step-9 model finished training)
+`frozen_step9.json`, sha256 `c61241d2746aeeabf59783c74c40dd88ec13ad84f717d117ad1e3fd83049d656`
+(the user waived commit-before-score; the hash is pinned here and in
+`scripts/s2p_stack_report.py`, which refuses to report if the file changes). Arms
+`s2pfull_117` (primary) / `s2pfull_53`, registered in `feature_sets.py` (tests: 195 passed).
+References: TabICL-117, the clean full model alone, the fixed rank blend, step 8f's
+`s2p_117`; the released model as context only, on the 206 non-leaked proteins.
+Conditional on the 9d and 9e gates. The step-8 table is left untouched; step 9 writes
+`residues_s2pfull.parquet`.
+
+### 9d — PASSED, 2026-10-06
+Run `s2p_full_20261006`, A100-80GB, ≈ 51 min and $2.14 per job. LIGYSIS trained on 2,614
+(exact) / 2,557 (clean: 57 excluded) proteins, CryptoBench on 759; losses fall in both
+stages (LIGYSIS 0.94 → 0.48; CryptoBench 0.85 → 0.70), none non-finite.
+
+| their test file, pooled (184) | AUC | AUPRC |
+|---|---|---|
+| released model (published) | 0.8935 | 0.4752 |
+| **exact recipe, our run (gate)** | **0.8928** | **0.4993** |
+| clean recipe, our run | 0.8922 | 0.4847 |
+
+- Gate passes (Δ −0.0007 AUC, +0.024 AUPRC; tolerance ±0.015 / ±0.03). AUC is exact; AUPRC
+  lands above theirs, within tolerance but near its edge: run-to-run variance of a single
+  fp16 fine-tune, in our favour this time. `step9_check_exact_all.json`.
+- **Removing the leaked LIGYSIS proteins costs nothing visible**: the clean model scores
+  0.485 pooled AUPRC on the 184, above the released model's 0.475.
+
+### 9e — PASSED, 2026-10-06
+Four clean fold models (LIGYSIS 2,517 / 2,521 / 2,534 / 2,520 = 2,614 minus each fold's
+exclusions; CryptoBench 576 / 567 / 568 / 566; none non-finite; $6.45 together).
+Single-chain per-protein AUPRC (`step9_check_clean_{0..3}.json`):
+
+| model | its held-out fold | its training folds | test |
+|---|---|---|---|
+| clean_0 | **0.425** | 0.602–0.641 | 0.465 |
+| clean_1 | **0.453** | 0.603–0.620 | 0.481 |
+| clean_2 | **0.442** | 0.645–0.673 | 0.483 |
+| clean_3 | **0.420** | 0.669–0.685 | 0.467 |
+
+### 9f — determinism gate PASSED, 2026-10-06
+`build/residues_s2pfull.parquet` (sha256 `f333c4dd…bcf73`; `step9_stack_table.json`): every
+row scored; pooled AUPRC 0.309 / 0.389 / 0.394 / 0.364 on folds 0–3 and 0.411 on test.
+Harness redeployed with `S2P_STACK_TABLE=residues_s2pfull.parquet`; control on train-fold-0
+equals `build/cv_scores/k64_train-fold-0.json` exactly (max |diff| 0.0, 75,800 rows).
+
+### 9f — SCORED ONCE, 2026-10-06
+Run `st2` (10 T4 jobs, ≈ $0.90); `scripts/s2p_stack_report.py --step 9` →
+`step9_thresholds.json` (written before test was read), `step9_result.json`. Checks:
+TabICL-117 reproduces the headline; `s2p_117` reproduces 8f exactly; the clean full model
+alone reproduces 9d (pooled 0.892 / 0.485 on the 184). The refactored report reproduces
+`step8_result.json` byte-for-byte.
+
+| CB-full (231) | **s2pfull_117** | s2pfull_53 | TabICL-117 | full alone | fixed blend | s2p_117 |
+|---|---|---|---|---|---|---|
+| per-protein AUC | **0.876** | 0.875 | 0.862 | 0.843 | 0.868 | 0.869 |
+| per-protein AUPRC | **0.482** | 0.478 | 0.441 | 0.450 | 0.481 | 0.461 |
+| pooled AUC | **0.905** | 0.902 | 0.885 | 0.881 | 0.886 | 0.898 |
+| pooled AUPRC | **0.421** | 0.408 | 0.360 | 0.411 | 0.367 | 0.396 |
+
+| CB-P2RANK-apo (184) | **s2pfull_117** | s2pfull_53 | TabICL-117 | full alone | fixed blend | s2p_117 |
+|---|---|---|---|---|---|---|
+| per-protein AUPRC | **0.517** | 0.512 | 0.469 | 0.481 | 0.510 | 0.496 |
+| pooled AUC | **0.907** | 0.903 | 0.883 | 0.892 | 0.890 | 0.900 |
+| pooled AUPRC | 0.476 | 0.471 | 0.398 | **0.485** | 0.413 | 0.447 |
+
+**Pre-registered claims** (per-protein AUPRC, CB-full, paired 95 % CI):
+- **Primary PASSES:** s2pfull_117 − full model alone **+0.032 [+0.018, +0.047]**.
+- **Secondary 1 PASSES:** − TabICL-117 **+0.041 [+0.027, +0.055]**.
+- **Secondary 2 does not pass:** − fixed rank blend +0.001 [−0.008, +0.010]. As in step 8:
+  per protein, a fixed 50/50 is as good. On pooled metrics the stack beats it (AUPRC
+  +0.054 [+0.029, +0.079]; AUC +0.019 [+0.013, +0.025]); per-protein AUC too
+  (+0.008 [+0.002, +0.015]).
+- **Secondary 3 does not pass:** − s2pfull_53 +0.005 [−0.002, +0.012]; the 64 frozen ESM PCs
+  are redundant per protein once the score is in (pooled AUPRC +0.013 [+0.003, +0.024]).
+- **Secondary 4 PASSES:** − s2p_117 **+0.022 [+0.013, +0.031]**. The stronger component makes
+  the stronger stack.
+- Not claimed: on the papers' metric (pooled AUPRC, 184) the stack ties its own component,
+  0.476 vs 0.485 (−0.009 [−0.033, +0.019]).
+
+**Threshold transfer is much better than in 8f:** test FPR **0.073** (TPR 0.616, MCC 0.411;
+TabICL-117: 0.071 / 0.559 / 0.374). The clean `all` model's test scores sit closer to its
+fold models' held-out scores than the plain model's did. Not claimed — it was not fixed.
+
+**Context, not claimed** (`scripts/s2p_released_context.py` → `step9_released_context.json`):
+on the 206 test proteins the released model never saw LIGYSIS labels for, per-protein /
+pooled AUPRC: **s2pfull_117 0.480 / 0.424**; released 0.442 / 0.382; TabICL-117 0.443 /
+0.372; clean full model alone 0.446 / 0.404. s2pfull_117 − released: per-protein
+**+0.038 [+0.021, +0.055]**, pooled **+0.043 [+0.012, +0.072]**.
+
+Cost of step 9: data fetch/extract ≈ $1; six full-recipe fine-tunes ≈ $10.7; TabICL ≈ $1.

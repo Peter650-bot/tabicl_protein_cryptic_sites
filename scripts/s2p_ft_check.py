@@ -23,7 +23,9 @@ from cryptic_tabicl import config as C, evaluate  # noqa: E402
 from s2p_evaluate import pooled  # noqa: E402
 
 KEY = ["apo_id", "chain", "seq_id", "icode"]
-TARGET = {"AUC": 0.888, "AUPRC": 0.446}
+# Published pooled numbers on their test file, per recipe (tolerances fixed before training).
+TARGETS = {"plain": {"AUC": 0.888, "AUPRC": 0.446},      # their "Finetuning" row
+           "full": {"AUC": 0.8935, "AUPRC": 0.4752}}     # the released model
 TOL = {"AUC": 0.015, "AUPRC": 0.03}
 
 
@@ -70,20 +72,27 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", required=True)
     ap.add_argument("--name", required=True)
+    ap.add_argument("--gate", choices=["plain", "full", "none"], default="plain",
+                    help="which published number model-`all` jobs are gated against")
     a = ap.parse_args()
 
     path = C.BUILD_DIR / "s2p_ft" / a.run_id / f"scores_{a.name}.parquet"
     ours, scores = keyed_scores(path)
     res = {"run_id": a.run_id, "name": a.name, "by_fold": by_group(ours).round(4).to_dict("records")}
-    if a.name == "all":
+    if a.name.endswith("all"):
         r = their_test_pooled(scores)
-        res["gate_8c"] = {"their_test_pooled": r, "target": TARGET, "tolerance": TOL,
-                          "passes": all(abs(r[m] - TARGET[m]) <= TOL[m] for m in TARGET)}
-    out = Path(f"finetuned_esm/step8_check_{a.name}.json")
+        res["their_test_pooled"] = r
+        if a.gate != "none":
+            t = TARGETS[a.gate]
+            res["gate"] = {"recipe": a.gate, "their_test_pooled": r, "target": t, "tolerance": TOL,
+                           "passes": all(abs(r[m] - t[m]) <= TOL[m] for m in t)}
+    out = Path(f"finetuned_esm/{'step9' if a.gate == 'full' or '_' in a.name else 'step8'}_check_{a.name}.json")
     out.write_text(json.dumps(res, indent=1, default=float))
     print(pd.DataFrame(res["by_fold"]).to_string(index=False))
-    if "gate_8c" in res:
-        print("\n8c:", json.dumps(res["gate_8c"], indent=1))
+    if "their_test_pooled" in res:
+        print("\ntheir test file, pooled:", res["their_test_pooled"])
+    if "gate" in res:
+        print("gate:", json.dumps(res["gate"], indent=1))
 
 
 if __name__ == "__main__":

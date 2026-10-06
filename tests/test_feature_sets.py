@@ -71,6 +71,7 @@ def test_every_arm_resolves_and_has_no_duplicates():
     for c in sup:
         t[c] = 0.0
     t["s2p_oof"] = 0.0
+    t["s2pfull_oof"] = 0.0
     for name in FS.FEATURE_SETS:
         want = sup if name in FS.USES_SUPERVISED_ESM else ()
         cols = FS.resolve(name, t, want)
@@ -129,7 +130,7 @@ def test_every_arm_resolves_against_the_real_table():
     for name in FS.FEATURE_SETS:
         if name in FS.USES_SUPERVISED_ESM and not sup:
             continue
-        if name in FS.USES_S2P and "s2p_oof" not in t.columns:
+        if name in FS.USES_S2P and not set(FS.FEATURE_SETS[name]["add"]) <= set(t.columns):
             continue
         want = sup if name in FS.USES_SUPERVISED_ESM else ()
         assert FS.resolve(name, t, want)
@@ -177,10 +178,19 @@ def test_the_context_draw_does_not_depend_on_which_features_are_present():
 STACKED = config.BUILD_DIR / "residues_s2p.parquet"
 
 
-def test_s2p_column_never_enters_the_control():
-    t = _fake_table().assign(s2p_oof=0.0)
-    assert "s2p_oof" not in FS.base_columns(t)
-    assert "s2p_oof" not in FS.resolve("control", t)
+def test_s2p_columns_never_enter_the_control():
+    t = _fake_table().assign(s2p_oof=0.0, s2pfull_oof=0.0)
+    for col in ("s2p_oof", "s2pfull_oof"):
+        assert col not in FS.base_columns(t)
+        assert col not in FS.resolve("control", t)
+
+
+def test_each_stack_arm_sees_only_its_own_score():
+    t = _fake_table().assign(s2p_oof=0.0, s2pfull_oof=0.0)
+    base = FS.resolve("control", t)
+    assert FS.resolve("s2pfull_117", t) == base + ["s2pfull_oof"]
+    assert "s2pfull_oof" not in FS.resolve("s2p_117", t)
+    assert "s2p_oof" not in FS.resolve("s2pfull_53", t)
 
 
 def test_s2p_arms_add_one_column_and_53_drops_every_pc():

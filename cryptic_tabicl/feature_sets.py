@@ -101,6 +101,9 @@ ALL_PCS: Tuple[str, ...] = tuple(f"esm_pc{i:02d}" for i in range(64))
 # it is not derived from features, and a table that carries it must still give the
 # control arm exactly the published 117.
 S2P_OOF: Tuple[str, ...] = ("s2p_oof",)
+# The same, from their full multitask + LIGYSIS recipe with test/fold-homologous LIGYSIS
+# proteins removed (PLAN.md step 9, `clean` variant).
+S2PFULL_OOF: Tuple[str, ...] = ("s2pfull_oof",)
 
 # ---------------------------------------------------------------- the arms
 # add  : derived families joined onto the base
@@ -124,15 +127,19 @@ FEATURE_SETS: Dict[str, Dict[str, Tuple[str, ...]]] = {
     # Stacking arms, pre-registered in finetuned_esm/frozen_step8.json.
     "s2p_117": {"add": S2P_OOF, "drop": ()},
     "s2p_53": {"add": S2P_OOF, "drop": ALL_PCS},
+    # Pre-registered in finetuned_esm/frozen_step9.json.
+    "s2pfull_117": {"add": S2PFULL_OOF, "drop": ()},
+    "s2pfull_53": {"add": S2PFULL_OOF, "drop": ALL_PCS},
 }
 
 USES_SUPERVISED_ESM = ("esmsup32", "esmsup32_seqwin_esmnb")
-USES_S2P = ("s2p_117", "s2p_53")
+USES_S2P = ("s2p_117", "s2p_53", "s2pfull_117", "s2pfull_53")
 
 
 def base_columns(table: pd.DataFrame) -> list[str]:
     """The published 117: model-visible columns that are not derived."""
-    excluded = set(config.NON_FEATURE_COLS) | set(ALL_DERIVED) | set(S2P_OOF)
+    excluded = (set(config.NON_FEATURE_COLS) | set(ALL_DERIVED) | set(S2P_OOF)
+                | set(S2PFULL_OOF))
     return [c for c in table.columns
             if c not in excluded and not c.startswith(SUPERVISED_PREFIX)]
 

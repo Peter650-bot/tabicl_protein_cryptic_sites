@@ -1,0 +1,8 @@
+{
+ "ran": true,
+ "passed": true,
+ "max_abs_diff": 0.0,
+ "row_order_identical": true,
+ "n": 75800,
+ "reference": "build/cv_scores/k64_train-fold-0.json"
+}

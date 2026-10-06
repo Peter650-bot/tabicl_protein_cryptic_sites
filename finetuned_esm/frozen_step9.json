@@ -1,0 +1,40 @@
+{
+ "frozen": "2026-10-06",
+ "status": "pre-registered; written while the step-9 fine-tunes train; no stacked arm scored",
+ "feature": {
+  "column": "s2pfull_oof",
+  "source": "their full recipe (multitask + LIGYSIS, train.ipynb cell 16, their finetuning_utils verbatim), clean variant (deploy/s2p_finetune_modal.py::finetune_full, run s2p_full_20261006)",
+  "clean_rule": "each model's LIGYSIS stage also drops every LIGYSIS protein >= 40 % identical over >= 50 % coverage to any protein the model scores held-out (finetuned_esm/ligysis_exclusions.json): clean_all -> test, clean_h -> fold h",
+  "assignment": "train-fold-h rows <- clean_h; test rows <- clean_all",
+  "conditional_on": "9d gate (exact_all reproduces the released model within ±0.015 AUC / ±0.03 AUPRC pooled) and 9e gate (every held-out fold scores like unseen data); if either fails, nothing below is run",
+  "table": "build/residues_s2pfull.parquet = residues_s2p.parquet + s2pfull_oof, row order unchanged"
+ },
+ "arms": {
+  "s2pfull_117": {"columns": "published 117 + s2pfull_oof (118)", "role": "primary"},
+  "s2pfull_53": {"columns": "117 minus the 64 ESM PCs + s2pfull_oof (54)", "role": "secondary"}
+ },
+ "protocol": {
+  "harness": "deploy/s2p_stack.py deployed with S2P_STACK_TABLE=residues_s2pfull.parquet; same context draw (budget 50,000, seed 0), tabicl 2.1.1",
+  "gate": "control arm on train-fold-0 from the new table must equal build/cv_scores/k64_train-fold-0.json exactly",
+  "threshold": "per fold at mean per-protein FPR 0.05, frozen = median of four; computed and written before test is read",
+  "test": "both arms scored on test once",
+  "known_issue_not_fixed": "step 8f showed the CV-frozen threshold overshoots on test (FPR 0.098) because the all-folds model's scores run hotter than the fold models'. The user chose not to fix this; threshold metrics are reported as they fall and are not claimed."
+ },
+ "references_on_test": {
+  "tabicl_117": "published zero-shot scores (build/modal_result_esm64.json)",
+  "full_alone": "clean_all's score on test (the component being stacked)",
+  "fixed_blend": "0.5 * within-protein percentile rank of tabicl_117 + 0.5 * that of full_alone",
+  "s2p_117": "step 8f's stacked arm (plain-recipe component), build/s2p_stack/st1/s2p_117_final.json",
+  "released_context_only": "the released model's step-5 scores; contaminated on 25 test proteins (9b), so compared only on the 206 non-leaked proteins and never claimed"
+ },
+ "metrics": "AUC and AUPRC per protein and pooled, on CB-full (231) and CB-P2RANK-apo (184); paired bootstrap over proteins, 10,000 resamples per-protein, 2,000 pooled, seed 0",
+ "claims": {
+  "primary": "s2pfull_117 minus full_alone, per-protein AUPRC, CB-full: paired 95 % CI entirely above zero",
+  "secondary_1": "s2pfull_117 minus tabicl_117, same metric and criterion",
+  "secondary_2": "s2pfull_117 minus fixed_blend, same metric and criterion",
+  "secondary_3": "s2pfull_117 minus s2pfull_53, same metric; reported either way",
+  "secondary_4": "s2pfull_117 minus s2p_117 (does a stronger component make a better stack), same metric and criterion",
+  "reported_not_claimed": "pooled AUPRC on CB-P2RANK-apo (the papers' convention); every arm vs the released model on the 206 non-leaked test proteins"
+ },
+ "known_caveat": "As in step 8: in CV job h the context rows' scores come from fold models that trained on fold h. CV only sets the threshold; no model behind any feature value saw a protein it scores, in either stage."
+}
