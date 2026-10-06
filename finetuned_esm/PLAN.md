@@ -191,3 +191,123 @@ Their model's AUPRC by our fold and by chain type (per-protein / pooled):
 fitted), the metrics and the step 8 decision rule. sha256
 `9aa0ebe8630b5b1f81e630075a01aa8005ae51fbe69f0a02bb14c0cfc8e2622f`. Waiting on a commit of
 the pre-registration before any blend is computed. Test suite: 191 passed, 1 skipped.
+
+### Step 7 — SCORED ONCE, 2026-10-06
+`scripts/s2p_blend.py` → `step7_result.json`; frozen.json hash checked before scoring.
+The s2p and TabICL arms reproduce step 5 exactly.
+
+| | s2p | TabICL-117 | rank blend | prob blend |
+|---|---|---|---|---|
+| CB-full per-protein AUC | 0.839 | 0.862 | 0.865 | 0.867 |
+| CB-full per-protein AUPRC | 0.446 | 0.441 | **0.477** | **0.480** |
+| CB-full pooled AUC | 0.882 | 0.885 | 0.884 | **0.903** |
+| CB-full pooled AUPRC | 0.397 | 0.360 | 0.367 | 0.417 |
+| 184 per-protein AUPRC | 0.480 | 0.469 | **0.508** | **0.512** |
+| 184 pooled AUC | 0.893 | 0.883 | 0.889 | **0.906** |
+| 184 pooled AUPRC | 0.475 | 0.398 | 0.416 | 0.480 |
+
+**Decision rule:**
+- **Primary passes.** Rank blend − s2p, per-protein AUPRC, CB-full: +0.031 [+0.018, +0.044].
+  Rank blend − TabICL: +0.036 [+0.022, +0.049]. The two models carry complementary signal.
+- **Secondary fails.** Prob blend − s2p, pooled AUPRC on the 184: +0.005 [−0.022, +0.031].
+  On the papers' own headline number, a fixed 50/50 blend does not beat their model.
+- Two tests were run. The primary survives a Bonferroni correction: its interval implies
+  SE ≈ 0.0066, so +0.031 sits ≈ 4.7 SE from zero against the 2.24 a two-test 95 % needs.
+- Not pre-registered, so observation only: the prob blend is at least as good as the rank
+  blend everywhere and significantly raises pooled AUC over both components (CB-full
+  +0.021 vs s2p, +0.017 vs TabICL).
+- Approximate threshold metrics, top 7.74 % per protein, CB-full: MCC rank 0.406 / prob
+  0.403 vs s2p 0.375, TabICL 0.377.
+
+**Step 8 is therefore proposed**, pending a go-ahead (see below).
+
+## Step 8 — out-of-fold stacking, option 1 (plain fine-tune), approved 2026-10-06
+
+The released model's multitask + LIGYSIS recipe needs data only published on the dead
+CESNET share; the user has emailed the authors. Meanwhile, the **plain fine-tune** from
+their `train.ipynb` ("Finetuning", pooled 0.888 / 0.446 on the 184 in their paper) needs
+only CryptoBench, which we have.
+
+Their recipe, exactly (`train.ipynb` cell 9, `finetuning_utils.py`): `FinetunedEsmModel`
+(ESM-2 3B + one 2,560→1 linear head), cast `.half()`; `bnb.optim.AdamW8bit(lr=1e-4,
+eps=1e-4)`, bitsandbytes 0.45.5; `BCEWithLogitsLoss(pos_weight=8.7481)`; batch 1, shuffled,
+`torch.manual_seed(42)`; 3 epochs, backbone frozen in epochs 0–1 and unfrozen in epoch 2;
+single-chain entries only, sequences > 1,024 skipped. Their per-epoch test pass is
+monitoring only, feeds nothing, and is omitted. Their `train.txt` = all four train folds
+(step 6: the released model memorised fold 3).
+
+Five fine-tunes: model `all` on folds 0–3 (= their setup), and model `h` on the three folds
+other than h, for h = 0..3.
+
+- **8a. Training files.** Their annotation format, per fold, from `s2p_inputs`.
+  *Gate:* single-chain/length filters applied as theirs; counts per fold recorded.
+- **8b. Pilot.** One small job (≈20 proteins, all three phases) on the target GPU.
+  *Gate:* runs to completion, loss falls, peak memory and s/protein measured. If the
+  projected cost exceeds ~2× the $15 estimate, stop and report before spending it.
+- **8c. Model `all` + reproduction.** Score the 184 pooled. *Gate (fixed now, before
+  training):* within ±0.015 AUC and ±0.03 AUPRC of their 0.888 / 0.446 — one training run,
+  so seed noise is allowed for, but a recipe error would miss by more.
+- **8d. Four fold models.** Each scores its held-out fold (all proteins, multi-chain
+  included, long chains chunked). *Gate:* every held-out fold scores like unseen data
+  (per-protein AUPRC in the test range, not the ~0.63 of memorised proteins).
+- **8e. Pre-register the stacking arms and decision rule;** commit before scoring test.
+- **8f. TabICL with the out-of-fold score as a feature**, CV threshold as usual, test once.
+
+### 8a — PASSED, 2026-10-06
+`scripts/s2p_build_train.py` → `build/s2p_train/train-fold-{0..3}.txt`, built by the same
+`s2p_inputs.their_annotation_rows` that rebuilt their test file (that file re-verified
+byte-identical after the refactor, sha256 `a534584c…`). Detail: `step8a_train_files.json`.
+- Single-chain entries over the four folds: **762 structures, 233,435 residues, 13,342
+  binding — exactly the Seq2Pocket Table 1 "CryptoBench train subset"**, positive rate
+  0.057155, exactly the rate their hard-coded class weights (0.5303, 8.7481) imply. So
+  their `train.txt` is all four folds' single-chain entries, and model `all` is their setup.
+- Their loader then drops 3 chains over 1,024 residues (fold 1: 1, fold 3: 2): 759
+  proteins, 230,263 residues are actually trained on. Per fold: 183 / 192 / 191 / 193.
+
+### 8b — PASSED, 2026-10-06
+`deploy/s2p_finetune_modal.py` (their loop line for line; two immaterial differences: our
+labels are float32 where their list→tensor conversion makes float64, and the shuffle uses
+a seeded generator rather than the global RNG). Pilot: 20 proteins, all three phases, on
+A100-80GB. Losses 1.067 → 1.045 → 1.012 (their logged epoch-0 loss: 1.065), none
+non-finite; peak memory 5.8 GB frozen, 21.4 GB full; 0.34 s/protein in the full epoch.
+Scores for 3 chains (one chunked) finite. Projected ≈ 10 min and ≈ $0.40 per job, ≈ $2
+for all five — well under the $15 estimate.
+
+### 8c — PASSED, 2026-10-06
+Model `all` (run `s2p_ft_20261006`; 759 proteins; 6.5 min, $0.27 on A100-80GB). Mean loss
+0.964 → 0.873 → 0.705, none non-finite; peak 24.9 GB. Detail: `step8_check_all.json`.
+- **Their test file, their labels, pooled: AUC 0.8869, AUPRC 0.4402** vs their published
+  0.888 / 0.446 (Δ −0.001 / −0.006; tolerance ±0.015 / ±0.03 fixed before training).
+  Their recipe is reproduced from scratch.
+- Same memorisation signature as the released model: single-chain training proteins
+  0.598–0.642 per-protein AUPRC vs 0.458 on single-chain test.
+
+### 8d — PASSED, 2026-10-06
+Four fold models (576 / 567 / 568 / 566 training proteins = the 8a per-fold sums; none
+non-finite; $0.71 together). Single-chain per-protein AUPRC (`step8_check_{0..3}.json`):
+
+| model | its held-out fold | its training folds | test |
+|---|---|---|---|
+| 0 | **0.405** | 0.609–0.639 | 0.455 |
+| 1 | **0.446** | 0.592–0.616 | 0.450 |
+| 2 | **0.412** | 0.614–0.640 | 0.454 |
+| 3 | **0.416** | 0.593–0.621 | 0.458 |
+
+Every held-out fold scores like unseen data. The held-out folds sit slightly below test,
+as TabICL's own CV folds do (0.376–0.442 vs 0.441 on test): fold difficulty, not leakage.
+
+### 8e — FROZEN, not yet run (2026-10-06)
+- **Out-of-fold column** (`scripts/s2p_build_stack_table.py` → `build/residues_s2p.parquet`,
+  staged): fold h rows from model h, test rows from model `all`; all 381,704 rows scored;
+  pooled AUPRC 0.315 / 0.366 / 0.357 / 0.353 on folds 0–3 and 0.371 on test, the same
+  unseen-data range everywhere (`step8_stack_table.json`).
+- **Arms registered** in `cryptic_tabicl/feature_sets.py`: family `S2P_OOF` excluded from
+  the base explicitly; `s2p_117` (118 features) and `s2p_53` (54). Tests added; suite 194
+  passed, 1 skipped.
+- **Harness** `deploy/s2p_stack.py` (sibling of feature_sweep.py, own app and volume).
+  **Determinism gate passed:** control on train-fold-0 from the new table equals
+  `build/cv_scores/k64_train-fold-0.json` exactly — max |diff| 0.0 over 75,800 scores,
+  identical row order (`step8_determinism_gate.json`).
+- **Pre-registration** `frozen_step8.json`, sha256 `205e34cb4f2e77bd9a6f78fa8b84343a673183e2b4b63caa8fe8ec4c6f0ac8e2`: arms, threshold protocol,
+  references (TabICL-117, the plain model alone, the fixed rank blend of the two), metrics,
+  and four claims with their criteria. Waiting on a commit before the CV and test stages run.

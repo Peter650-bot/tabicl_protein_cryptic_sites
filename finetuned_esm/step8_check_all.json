@@ -1,0 +1,111 @@
+{
+ "run_id": "s2p_ft_20261006",
+ "name": "all",
+ "by_fold": [
+  {
+   "fold": "test",
+   "multichain": false,
+   "n": 193,
+   "pp_AUC": 0.8452,
+   "pp_AUPRC": 0.4575,
+   "pooled_AUC": 0.8849,
+   "pooled_AUPRC": 0.4329
+  },
+  {
+   "fold": "test",
+   "multichain": true,
+   "n": 38,
+   "pp_AUC": 0.802,
+   "pp_AUPRC": 0.254,
+   "pooled_AUC": 0.8374,
+   "pooled_AUPRC": 0.181
+  },
+  {
+   "fold": "train-fold-0",
+   "multichain": false,
+   "n": 187,
+   "pp_AUC": 0.9134,
+   "pp_AUPRC": 0.5979,
+   "pooled_AUC": 0.9401,
+   "pooled_AUPRC": 0.6086
+  },
+  {
+   "fold": "train-fold-0",
+   "multichain": true,
+   "n": 36,
+   "pp_AUC": 0.7372,
+   "pp_AUPRC": 0.1842,
+   "pooled_AUC": 0.794,
+   "pooled_AUPRC": 0.1312
+  },
+  {
+   "fold": "train-fold-1",
+   "multichain": false,
+   "n": 199,
+   "pp_AUC": 0.9335,
+   "pp_AUPRC": 0.6417,
+   "pooled_AUC": 0.9559,
+   "pooled_AUPRC": 0.6857
+  },
+  {
+   "fold": "train-fold-1",
+   "multichain": true,
+   "n": 29,
+   "pp_AUC": 0.782,
+   "pp_AUPRC": 0.2821,
+   "pooled_AUC": 0.8193,
+   "pooled_AUPRC": 0.2126
+  },
+  {
+   "fold": "train-fold-2",
+   "multichain": false,
+   "n": 195,
+   "pp_AUC": 0.9182,
+   "pp_AUPRC": 0.6073,
+   "pooled_AUC": 0.9436,
+   "pooled_AUPRC": 0.6494
+  },
+  {
+   "fold": "train-fold-2",
+   "multichain": true,
+   "n": 31,
+   "pp_AUC": 0.8289,
+   "pp_AUPRC": 0.2445,
+   "pooled_AUC": 0.8754,
+   "pooled_AUPRC": 0.1931
+  },
+  {
+   "fold": "train-fold-3",
+   "multichain": false,
+   "n": 201,
+   "pp_AUC": 0.9065,
+   "pp_AUPRC": 0.6001,
+   "pooled_AUC": 0.9384,
+   "pooled_AUPRC": 0.6193
+  },
+  {
+   "fold": "train-fold-3",
+   "multichain": true,
+   "n": 27,
+   "pp_AUC": 0.725,
+   "pp_AUPRC": 0.2457,
+   "pooled_AUC": 0.8106,
+   "pooled_AUPRC": 0.2018
+  }
+ ],
+ "gate_8c": {
+  "their_test_pooled": {
+   "AUC": 0.8869051466870439,
+   "AUPRC": 0.44022451093186504
+  },
+  "target": {
+   "AUC": 0.888,
+   "AUPRC": 0.446
+  },
+  "tolerance": {
+   "AUC": 0.015,
+   "AUPRC": 0.03
+  },
+  "passes": true
+ }
+}

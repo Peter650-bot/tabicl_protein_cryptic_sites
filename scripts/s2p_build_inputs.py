@@ -95,10 +95,8 @@ def main() -> None:
     test_entries = D.load_json(C.FOLDS_DIR / "test.json")
     their = S.their_test_entries(test_entries)
     lines, label_rows = [], []
-    for pdb_id, (chain, binding) in sorted(their.items()):
-        res = S.chain_residues(C.STRUCTURE_CACHE / f"{pdb_id.lower()}.cif.gz", chain)
+    for pdb_id, chain, res, pos in S.their_annotation_rows(test_entries, C.STRUCTURE_CACHE):
         seq = S.sequence_of(res)
-        pos = S.label_positions([r[0] for r in res], binding)
         lines.append(S.their_line(pdb_id, chain, seq, pos))
         apo_id = f"{pdb_id}{chain}"
         pos_set = set(pos)

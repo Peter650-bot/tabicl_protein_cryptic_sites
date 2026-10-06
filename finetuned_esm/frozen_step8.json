@@ -1,0 +1,37 @@
+{
+ "frozen": "2026-10-06",
+ "status": "pre-registered; no stacked arm has been scored on any fold or on test",
+ "feature": {
+  "column": "s2p_oof",
+  "source": "plain fine-tune of ESM-2 3B with Škrhák et al.'s recipe (deploy/s2p_finetune_modal.py, run s2p_ft_20261006)",
+  "assignment": "train-fold-h rows <- fold model h (trained on the other three folds); test rows <- model `all` (trained on folds 0-3)",
+  "verified": "8c: model `all` reproduces their 0.888 / 0.446 pooled (0.887 / 0.440); 8d: every held-out fold scores like unseen data",
+  "table": "build/residues_s2p.parquet = residues_esm64.parquet + s2p_oof, row order unchanged (sha256 1a73da3c...)"
+ },
+ "arms": {
+  "s2p_117": {"columns": "published 117 + s2p_oof (118)", "role": "primary"},
+  "s2p_53": {"columns": "117 minus the 64 ESM PCs + s2p_oof (54)", "role": "secondary"}
+ },
+ "protocol": {
+  "harness": "deploy/s2p_stack.py: same context draw (sampling.build_context, budget 50,000, seed 0), CrypticSitePredictor defaults, tabicl 2.1.1, columns in table order",
+  "gate": "control arm on train-fold-0 must equal build/cv_scores/k64_train-fold-0.json exactly before any arm runs",
+  "cv": "both arms on all four train folds; nothing is selected between arms on CV",
+  "threshold": "per fold, evaluate.choose_threshold at mean per-protein FPR 0.05; frozen = median of the four (the headline protocol)",
+  "test": "both arms scored on test once"
+ },
+ "references_on_test": {
+  "tabicl_117": "published zero-shot scores, build/modal_result_esm64.json",
+  "plain_alone": "model `all`'s score on test (the component being stacked)",
+  "fixed_blend": "step-7 rank rule applied to tabicl_117 and plain_alone: 0.5 * within-protein percentile rank of each"
+ },
+ "metrics": "AUC and AUPRC per protein and pooled, on CB-full (231) and CB-P2RANK-apo (184); TPR/FPR/MCC/F1_weighted at the CV-frozen threshold for the stacked arms",
+ "comparisons": "paired bootstrap over proteins, same resample for every arm; 10,000 resamples per-protein, 2,000 pooled, seed 0",
+ "claims": {
+  "primary": "s2p_117 minus plain_alone, per-protein AUPRC, CB-full: claimed as 'stacking beats the fine-tuned model it stacks' only if the paired 95 % CI is entirely above zero",
+  "secondary_1": "s2p_117 minus tabicl_117, per-protein AUPRC, CB-full: same criterion",
+  "secondary_2": "s2p_117 minus fixed_blend, per-protein AUPRC, CB-full: 'learning the combination beats a fixed one' only if the CI is entirely above zero",
+  "secondary_3": "s2p_117 minus s2p_53, per-protein AUPRC, CB-full: whether the 64 frozen ESM PCs still add once the score is present; reported either way",
+  "reported_not_claimed": "pooled AUPRC on CB-P2RANK-apo (the papers' convention); the released multitask+LIGYSIS model from step 5 as context only -- it is a stronger component built from data we do not have, so it does not test stacking"
+ },
+ "known_caveat": "In CV job h, the context rows' scores come from fold models that trained on fold h. This second-order leak touches only CV, which is used only to set the threshold; no model behind any feature value ever trained on a test protein."
+}

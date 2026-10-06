@@ -1,0 +1,38 @@
+{
+ "train-fold-0": {
+  "model": "0",
+  "rows": 75800,
+  "pooled_AUC": 0.8523,
+  "pooled_AUPRC": 0.3147
+ },
+ "train-fold-1": {
+  "model": "1",
+  "rows": 77725,
+  "pooled_AUC": 0.8725,
+  "pooled_AUPRC": 0.3662
+ },
+ "train-fold-2": {
+  "model": "2",
+  "rows": 79083,
+  "pooled_AUC": 0.8747,
+  "pooled_AUPRC": 0.3574
+ },
+ "train-fold-3": {
+  "model": "3",
+  "rows": 72343,
+  "pooled_AUC": 0.8683,
+  "pooled_AUPRC": 0.3528
+ },
+ "test": {
+  "model": "all",
+  "rows": 76753,
+  "pooled_AUC": 0.8756,
+  "pooled_AUPRC": 0.3714
+ },
+ "_file": {
+  "rows": 381704,
+  "columns": 127,
+  "sha256": "1a73da3cfb8a3eab9c1f2c35825a31b370874200657572232026fb2694c718e5",
+  "staged": "/home/peets/cryptobench_stage/tables/residues_s2p.parquet"
+ }
+}

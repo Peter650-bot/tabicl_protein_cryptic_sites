@@ -1,0 +1,53 @@
+{
+ "train-fold-0": {
+  "entries_in_fold": 219,
+  "single_chain_entries": 183,
+  "skipped_multichain": 36,
+  "empty_chains": 0,
+  "over_max_length_skipped_by_loader": 0,
+  "proteins_trained_on": 183,
+  "residues_trained_on": 54791,
+  "positives_trained_on": 3129,
+  "sha256": "0f500b862e22e467e3ed49c090e7fa18331b6501b965229ff4c2fb661190fea8"
+ },
+ "train-fold-1": {
+  "entries_in_fold": 222,
+  "single_chain_entries": 193,
+  "skipped_multichain": 29,
+  "empty_chains": 0,
+  "over_max_length_skipped_by_loader": 1,
+  "proteins_trained_on": 192,
+  "residues_trained_on": 60558,
+  "positives_trained_on": 3496,
+  "sha256": "9b7550ad8cbfdaa96f0350763cf997622965de0792173ba89f8ab76c27543381"
+ },
+ "train-fold-2": {
+  "entries_in_fold": 222,
+  "single_chain_entries": 191,
+  "skipped_multichain": 31,
+  "empty_chains": 0,
+  "over_max_length_skipped_by_loader": 0,
+  "proteins_trained_on": 191,
+  "residues_trained_on": 58225,
+  "positives_trained_on": 3403,
+  "sha256": "736130d9c16415e6989634d73c08316e04f3147e46ee267136dc7cc70c4825b6"
+ },
+ "train-fold-3": {
+  "entries_in_fold": 222,
+  "single_chain_entries": 195,
+  "skipped_multichain": 27,
+  "empty_chains": 0,
+  "over_max_length_skipped_by_loader": 2,
+  "proteins_trained_on": 193,
+  "residues_trained_on": 56689,
+  "positives_trained_on": 3235,
+  "sha256": "4c8b42c34deedd9e459cc8b03f5b15ba439556dae4af1cba5db455e73cca98e5"
+ },
+ "all_folds": {
+  "proteins_trained_on": 759,
+  "residues_trained_on": 230263,
+  "positives_trained_on": 13263,
+  "positive_rate": 0.05759935378241402,
+  "their_pos_weight_implies_rate": 0.057155268001051654
+ }
+}

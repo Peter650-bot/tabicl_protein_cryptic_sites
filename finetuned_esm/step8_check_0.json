@@ -1,0 +1,96 @@
+{
+ "run_id": "s2p_ft_20261006",
+ "name": "0",
+ "by_fold": [
+  {
+   "fold": "test",
+   "multichain": false,
+   "n": 193,
+   "pp_AUC": 0.841,
+   "pp_AUPRC": 0.4554,
+   "pooled_AUC": 0.8828,
+   "pooled_AUPRC": 0.4185
+  },
+  {
+   "fold": "test",
+   "multichain": true,
+   "n": 38,
+   "pp_AUC": 0.801,
+   "pp_AUPRC": 0.2523,
+   "pooled_AUC": 0.8304,
+   "pooled_AUPRC": 0.161
+  },
+  {
+   "fold": "train-fold-0",
+   "multichain": false,
+   "n": 187,
+   "pp_AUC": 0.8054,
+   "pp_AUPRC": 0.4052,
+   "pooled_AUC": 0.8629,
+   "pooled_AUPRC": 0.3549
+  },
+  {
+   "fold": "train-fold-0",
+   "multichain": true,
+   "n": 36,
+   "pp_AUC": 0.7365,
+   "pp_AUPRC": 0.1825,
+   "pooled_AUC": 0.8016,
+   "pooled_AUPRC": 0.1522
+  },
+  {
+   "fold": "train-fold-1",
+   "multichain": false,
+   "n": 199,
+   "pp_AUC": 0.9385,
+   "pp_AUPRC": 0.639,
+   "pooled_AUC": 0.9553,
+   "pooled_AUPRC": 0.6431
+  },
+  {
+   "fold": "train-fold-1",
+   "multichain": true,
+   "n": 29,
+   "pp_AUC": 0.7924,
+   "pp_AUPRC": 0.2872,
+   "pooled_AUC": 0.8298,
+   "pooled_AUPRC": 0.2076
+  },
+  {
+   "fold": "train-fold-2",
+   "multichain": false,
+   "n": 195,
+   "pp_AUC": 0.9248,
+   "pp_AUPRC": 0.6229,
+   "pooled_AUC": 0.9481,
+   "pooled_AUPRC": 0.6498
+  },
+  {
+   "fold": "train-fold-2",
+   "multichain": true,
+   "n": 31,
+   "pp_AUC": 0.8311,
+   "pp_AUPRC": 0.2505,
+   "pooled_AUC": 0.8823,
+   "pooled_AUPRC": 0.2353
+  },
+  {
+   "fold": "train-fold-3",
+   "multichain": false,
+   "n": 201,
+   "pp_AUC": 0.9115,
+   "pp_AUPRC": 0.609,
+   "pooled_AUC": 0.9409,
+   "pooled_AUPRC": 0.6193
+  },
+  {
+   "fold": "train-fold-3",
+   "multichain": true,
+   "n": 27,
+   "pp_AUC": 0.7335,
+   "pp_AUPRC": 0.2447,
+   "pooled_AUC": 0.8088,
+   "pooled_AUPRC": 0.2099
+  }
+ ]
+}

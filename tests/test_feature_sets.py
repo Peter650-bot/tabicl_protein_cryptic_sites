@@ -70,6 +70,7 @@ def test_every_arm_resolves_and_has_no_duplicates():
     sup = tuple(f"esm_sup{i:02d}" for i in range(32))
     for c in sup:
         t[c] = 0.0
+    t["s2p_oof"] = 0.0
     for name in FS.FEATURE_SETS:
         want = sup if name in FS.USES_SUPERVISED_ESM else ()
         cols = FS.resolve(name, t, want)
@@ -128,6 +129,8 @@ def test_every_arm_resolves_against_the_real_table():
     for name in FS.FEATURE_SETS:
         if name in FS.USES_SUPERVISED_ESM and not sup:
             continue
+        if name in FS.USES_S2P and "s2p_oof" not in t.columns:
+            continue
         want = sup if name in FS.USES_SUPERVISED_ESM else ()
         assert FS.resolve(name, t, want)
 
@@ -169,3 +172,29 @@ def test_the_context_draw_does_not_depend_on_which_features_are_present():
         cb, _ = sampling.build_context(b, budget=200, seed=0)
         pd.testing.assert_frame_equal(
             ca[keys].reset_index(drop=True), cb[keys].reset_index(drop=True))
+
+
+STACKED = config.BUILD_DIR / "residues_s2p.parquet"
+
+
+def test_s2p_column_never_enters_the_control():
+    t = _fake_table().assign(s2p_oof=0.0)
+    assert "s2p_oof" not in FS.base_columns(t)
+    assert "s2p_oof" not in FS.resolve("control", t)
+
+
+def test_s2p_arms_add_one_column_and_53_drops_every_pc():
+    t = _fake_table().assign(s2p_oof=0.0)
+    base = FS.resolve("control", t)
+    a117, a53 = FS.resolve("s2p_117", t), FS.resolve("s2p_53", t)
+    assert a117 == base + ["s2p_oof"]
+    assert a53 == [c for c in base if c not in FS.ALL_PCS] + ["s2p_oof"]
+
+
+@pytest.mark.skipif(not STACKED.exists(), reason="stacking table not built")
+def test_s2p_arms_against_the_stacking_table():
+    t = pd.read_parquet(STACKED)
+    assert len(FS.resolve("control", t)) == PUBLISHED_N_FEATURES
+    assert len(FS.resolve("s2p_117", t)) == PUBLISHED_N_FEATURES + 1
+    assert len(FS.resolve("s2p_53", t)) == 54
+    assert t["s2p_oof"].notna().all()

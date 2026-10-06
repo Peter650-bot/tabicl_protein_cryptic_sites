@@ -96,6 +96,12 @@ TRIM_WEAK_PCS: Tuple[str, ...] = (
 
 ALL_PCS: Tuple[str, ...] = tuple(f"esm_pc{i:02d}" for i in range(64))
 
+# The out-of-fold score of Škrhák et al.'s fine-tuned ESM-2 (finetuned_esm/PLAN.md
+# step 8; `scripts/s2p_build_stack_table.py`). Excluded from the base explicitly:
+# it is not derived from features, and a table that carries it must still give the
+# control arm exactly the published 117.
+S2P_OOF: Tuple[str, ...] = ("s2p_oof",)
+
 # ---------------------------------------------------------------- the arms
 # add  : derived families joined onto the base
 # drop : base columns removed
@@ -115,14 +121,18 @@ FEATURE_SETS: Dict[str, Dict[str, Tuple[str, ...]]] = {
     # depends on which fold is held out.
     "esmsup32": {"add": (), "drop": ALL_PCS},
     "esmsup32_seqwin_esmnb": {"add": SEQWIN + ESMNB, "drop": ALL_PCS},
+    # Stacking arms, pre-registered in finetuned_esm/frozen_step8.json.
+    "s2p_117": {"add": S2P_OOF, "drop": ()},
+    "s2p_53": {"add": S2P_OOF, "drop": ALL_PCS},
 }
 
 USES_SUPERVISED_ESM = ("esmsup32", "esmsup32_seqwin_esmnb")
+USES_S2P = ("s2p_117", "s2p_53")
 
 
 def base_columns(table: pd.DataFrame) -> list[str]:
     """The published 117: model-visible columns that are not derived."""
-    excluded = set(config.NON_FEATURE_COLS) | set(ALL_DERIVED)
+    excluded = set(config.NON_FEATURE_COLS) | set(ALL_DERIVED) | set(S2P_OOF)
     return [c for c in table.columns
             if c not in excluded and not c.startswith(SUPERVISED_PREFIX)]
 

@@ -104,6 +104,19 @@ def their_line(pdb_id: str, chain: str, seq: str, positions: Iterable[int]) -> s
     return f"{pdb_id};{chain};UNKNOWN;{labels};{seq}"
 
 
+def their_annotation_rows(entries: dict, structure_dir) -> List[Tuple[str, str, List[Residue], List[int]]]:
+    """(pdb_id, chain, residues, labelled positions) per entry, as their files hold them.
+
+    One implementation for the test file (reproduction gate) and the train-fold
+    files (step 8 fine-tunes), so the two can never be built differently.
+    """
+    rows = []
+    for pdb_id, (chain, binding) in sorted(their_test_entries(entries).items()):
+        res = chain_residues(f"{structure_dir}/{pdb_id.lower()}.cif.gz", chain)
+        rows.append((pdb_id, chain, res, label_positions([r[0] for r in res], binding)))
+    return rows
+
+
 def chain_residues(cif_path, chain: str) -> List[Residue]:
     """Their residue list for one chain, with the true insertion code alongside.
 
