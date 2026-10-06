@@ -23,6 +23,14 @@ Reproduce with `python scripts/compare_variants.py`.
 > over the sklearn controls roughly doubled, and the per-stratum AUCs rose slightly,
 > because the feature was shifting the model's prior rather than helping it rank.
 
+> **Newer state of the art, 2026-10-06 (§ 13).** Two 2025–26 papers fine-tune ESM-2 3B on
+> CryptoBench and report pooled AUPRC 0.475. Scored per protein by this pipeline, their
+> released model *ties* the zero-shot headline below on AUPRC (0.446 vs 0.441) and trails it
+> on AUC. Their training recipe leaks LIGYSIS labels for 25 test proteins (§ 13.5). Stacking
+> the two — TabICL with a clean, out-of-fold fine-tuned score as a 118th feature — reaches
+> per-protein AUPRC **0.482** / AUC **0.876**. That model is not zero-shot and is reported
+> beside the headline, not in place of it.
+
 ---
 
 ## 1. Headline
@@ -53,6 +61,10 @@ still worth keeping as the no-pLM reference point; it is not a win.
 ---
 
 ## 2. Against the published benchmark
+
+pLM-NN below is CryptoBench's own baseline. The stronger fine-tuned ESM-2 published after
+this table was written (pooled AUPRC 0.475 on CB-P2RANK-apo) is compared in § 13, where both
+conventions — per protein and pooled — are reported for every model.
 
 CryptoBench reports on several subsets. **Only CB-full is comparable to us** — we
 evaluate every test protein, whereas the P2Rank and PocketMiner figures are on subsets
@@ -1327,3 +1339,181 @@ before.
 
 Detail in `feature_sweep/README.md`; grid in `deploy/feature_grid.py`; arms in
 `cryptic_tabicl/feature_sets.py`.
+
+---
+
+## 13. The 2025–26 fine-tuned ESM-2 (Škrhák et al.), 2026-10-06
+
+Two papers from the CryptoBench group were published after this project's benchmark
+comparison was written, and both report the current state of the art on exactly this task:
+
+- Škrhák, Gamouh, Hoksza, *Hidden in protein sequences: Predicting cryptic binding sites*,
+  ACM BCB 2025 — ESM-2 3B fine-tuned on CryptoBench, with a pLDDT / apo–holo-distance side
+  task and a pre-training stage on LIGYSIS general binding sites.
+- Škrhák, Polák, Novotný, Hoksza, *Seq2Pocket*, bioRxiv 2026 — reuses that model unchanged
+  for cryptic sites and adds pocket-level post-processing. Its residue-level AUC/AUPRC are
+  the same model's.
+
+Full log, every gate and every number: [`finetuned_esm/PLAN.md`](finetuned_esm/PLAN.md).
+Cost of everything below: ≈ $15 of GPU.
+
+### 13.1 What they report, and what it is comparable to
+
+| their model, CryptoBench test | AUC | AUPRC | MCC |
+|---|---|---|---|
+| fine-tuned ESM-2 3B, multitask + LIGYSIS (released) | 0.894 | 0.475 | 0.472 |
+| plain fine-tune, CryptoBench only | 0.888 | 0.446 | 0.448 |
+| frozen-embedding baseline (≈ pLM-NN) | 0.871 | 0.382 | 0.395 |
+
+Read from their code, not the papers: **every number is pooled** (all residues of all
+proteins in one vector) and the test set is the 184 single-chain structures — exactly our
+CB-P2RANK-apo, residue for residue. Their MCC threshold (0.70) was chosen by sweeping on the
+test file; AUC and AUPRC are unaffected. Neither paper reports a per-protein number.
+
+### 13.2 Their released model, scored our way
+
+The weights (`skrhakv/seq2pocket`, `cbs-model.pt`, sha256-pinned) were run on our table.
+Their input sequences were rebuilt with their own extraction code under their pinned biotite
+0.41.2 and joined to our residues on author keys; every one of our 381,704 residues maps.
+The rebuilt test file is their Table 1 to the residue (184 / 55,572 / 3,158), and the run
+reproduces their published numbers to ≤ 0.0003 (AUC 0.8935, AUPRC 0.4753, MCC 0.4721).
+
+Paired bootstrap against TabICLv2-117 (10,000 resamples per-protein, 2,000 pooled):
+
+| | CB-full (231) | CB-P2RANK-apo (184) |
+|---|---|---|
+| per-protein AUC | 0.839 vs **0.862**, −0.023 [−0.039, −0.006] | 0.848 vs 0.861 (tie) |
+| per-protein AUPRC | 0.446 vs 0.441 (tie) | 0.480 vs 0.469 (tie) |
+| pooled AUC | 0.882 vs 0.885 (tie) | 0.893 vs 0.883 (tie) |
+| pooled AUPRC | 0.397 vs 0.360 (tie) | **0.475** vs 0.398, +0.078 [+0.034, +0.120] |
+
+**Per protein — this project's convention — the published state of the art and TabICL are
+tied on AUPRC, and TabICL is ahead on AUC.** The fine-tuned model's one significant lead is
+pooled AUPRC on the 184, the single number its papers report. Its scores are comparable
+across proteins, so pooling costs it almost nothing (0.480 → 0.475); TabICL ranks well within
+a protein but its score level shifts between proteins (cf. § 10), so pooling costs it 0.071.
+
+Two side findings: it memorises its training proteins (single-chain training proteins score
++0.15–0.19 per-protein AUPRC above test), and its weak spot is multi-chain structures, which
+its training data skips (per-protein AUPRC 0.278 on the 38 multi-chain test proteins).
+
+### 13.3 A fixed blend beats both
+
+Pre-registered (`finetuned_esm/frozen.json`, committed before scoring): the mean of each
+model's within-protein percentile rank, nothing fitted. Per-protein AUPRC on CB-full
+**0.477**, against 0.446 (theirs) and 0.441 (TabICL): +0.031 [+0.018, +0.044] and +0.036
+[+0.022, +0.049]. The two models carry complementary signal. On pooled AUPRC over the 184 a
+fixed 50/50 does **not** beat theirs (0.480 vs 0.475, tie).
+
+### 13.4 Stacking needs out-of-fold scores, and gets them
+
+A score can only be a TabICL feature if it exists, honestly, on the context rows — the
+training proteins — and the released model memorised those. So their recipe was rebuilt
+and retrained per fold: fold model *h* trains on the other three folds and scores fold *h*;
+model `all` trains on all four and scores test. Two recipes were run.
+
+**Plain fine-tune (step 8, CryptoBench only, their `train.ipynb` cell 9 line for line).**
+The rebuilt per-fold training files are their `train.txt` exactly (762 / 233,435 / 13,342,
+and the positive rate their hard-coded class weights imply). Model `all` reproduces their
+0.888 / 0.446 at 0.887 / 0.440; every held-out fold scores like unseen data. ≈ $1.
+
+**Full recipe (step 9, multitask + LIGYSIS, cell 16, their `finetuning_utils.py`
+vendored verbatim)** — run after the authors supplied the training data. Their CryptoBench
+files are identical to our rebuilds; their checkpoint is byte-identical to the released
+model. Our exact-recipe model `all` reproduces it: pooled 0.893 / 0.499 vs 0.894 / 0.475
+(AUC exact; AUPRC above theirs, within the pre-set tolerance — single-run variance).
+
+### 13.5 Their recipe leaks test labels
+
+Their LIGYSIS training list removes 46 UniProt IDs, presumably for test overlap. Measured
+against their actual list (`scripts/s2p_ligysis_overlap.py`: their loader's filters, then a
+5-mer screen and BLOSUM62 local alignment):
+
+| | proteins | exact UniProt in their LIGYSIS training | ≥ 90 % identity | ≥ 40 % identity |
+|---|---|---|---|---|
+| CryptoBench test | 231 | **28** | 25 | 38 |
+
+For the 25 near-identical test proteins, **238 of 377 cryptic residues (63 %) are labelled
+binding in LIGYSIS training**; for 16 of them essentially all are. Both datasets take sites
+from ligand-bound PDB entries, so these are the test labels.
+
+**The measured effect is small.** Per-protein AUPRC, released model vs the plain fine-tune
+(which never saw LIGYSIS): leaked 25 — 0.475 vs 0.475; clean 206 — 0.442 vs 0.418, +0.024
+[+0.011, +0.039]. LIGYSIS's benefit is real and sits on clean proteins; n = 25 cannot rule
+out a leak effect of ~0.05. The leaked proteins happen to be easy for the fine-tuned models
+and hard for TabICL: without them, the released model's pooled lead over TabICL on the 184
+shrinks from 0.077 to 0.050.
+
+The step-2 reading of their exclusion list as a similarity screen against the test set was
+an inference, and it was wrong; the PLAN log records the correction.
+
+So the full recipe was run **clean** for stacking: each model's LIGYSIS stage also drops
+every LIGYSIS protein ≥ 40 % identical (coverage ≥ 50 %) to anything that model scores —
+test for `all`, fold *h* for fold model *h* (57 and 80–97 of 2,614 proteins). The clean
+`all` model scores 0.892 / **0.485** pooled on the 184 — above the released 0.475.
+
+### 13.6 The stacked model
+
+TabICLv2 on the 117 features plus the out-of-fold score (`s2pfull_117`), same context draw,
+same threshold protocol; the harness reproduces the stored control scores exactly
+(max |Δ| 0.0). Pre-registered in `finetuned_esm/frozen_step9.json` (sha256 pinned before
+scoring); scored once.
+
+| CB-full (231) | **stack (full)** | stack (plain) | TabICL-117 | clean full alone | fixed blend |
+|---|---|---|---|---|---|
+| per-protein AUC | **0.876** | 0.869 | 0.862 | 0.843 | 0.868 |
+| per-protein AUPRC | **0.482** | 0.461 | 0.441 | 0.450 | 0.481 |
+| pooled AUC | **0.905** | 0.898 | 0.885 | 0.881 | 0.886 |
+| pooled AUPRC | **0.421** | 0.396 | 0.360 | 0.411 | 0.367 |
+| TPR / FPR / MCC (CV-frozen threshold) | 0.616 / 0.073 / **0.411** | 0.661 / 0.098 / 0.390 | 0.559 / 0.071 / 0.374 | — | — |
+
+| CB-P2RANK-apo (184) | **stack (full)** | stack (plain) | TabICL-117 | clean full alone | fixed blend |
+|---|---|---|---|---|---|
+| per-protein AUPRC | **0.517** | 0.496 | 0.469 | 0.481 | 0.510 |
+| pooled AUC | **0.907** | 0.900 | 0.883 | 0.892 | 0.890 |
+| pooled AUPRC | 0.476 | 0.447 | 0.398 | **0.485** | 0.413 |
+
+Claims (per-protein AUPRC, CB-full, paired 95 % CI):
+
+| claim | Δ | verdict |
+|---|---|---|
+| stack beats the fine-tuned model it stacks | +0.032 [+0.018, +0.047] | **holds** |
+| stack beats TabICL-117 | +0.041 [+0.027, +0.055] | **holds** |
+| stack beats the step-8 (plain) stack | +0.022 [+0.013, +0.031] | **holds** |
+| stack beats the fixed rank blend | +0.001 [−0.008, +0.010] | does not hold |
+| the 64 frozen ESM PCs still add once the score is in | +0.005 [−0.002, +0.012] | does not hold |
+
+- **Per protein, learning the combination buys nothing over a fixed 50/50.** On pooled
+  metrics it does: AUPRC +0.054 [+0.029, +0.079], AUC +0.019 [+0.013, +0.025] over the
+  blend — a within-protein rank blend discards cross-protein scale by construction.
+- **The frozen ESM PCs are redundant** once a fine-tuned score is present (`s2pfull_53`,
+  54 features, is within noise per protein).
+- **The threshold transfers.** The plain stack's CV-frozen threshold overshot to FPR 0.098
+  on test, because its test-scoring model ran hotter than the fold models (negatives' mean
+  0.296 vs 0.20–0.27). With the full recipe it lands at 0.073, beside TabICL-117's 0.071.
+- **On the papers' own metric** (pooled AUPRC, 184) the stack ties its component, 0.476 vs
+  0.485.
+
+### 13.7 Against the released model, on proteins it never saw labels for
+
+Context only, not a pre-registered claim (`finetuned_esm/step9_released_context.json`). On
+the 206 test proteins outside the LIGYSIS leak:
+
+| | per-protein AUPRC | pooled AUPRC | Δ per-protein vs released | Δ pooled vs released |
+|---|---|---|---|---|
+| **stack (full)** | **0.480** | **0.424** | **+0.038 [+0.021, +0.055]** | **+0.043 [+0.012, +0.072]** |
+| stack (plain) | 0.458 | 0.401 | +0.016 [−0.004, +0.036] | +0.019 [−0.015, +0.049] |
+| clean full model alone | 0.446 | 0.404 | +0.004 [−0.005, +0.012] | +0.023 [+0.004, +0.039] |
+| TabICL-117 | 0.443 | 0.372 | +0.001 [−0.023, +0.025] | −0.010 [−0.053, +0.031] |
+| released model | 0.442 | 0.382 | — | — |
+
+### 13.8 What this changes
+
+- **The published SOTA is not ahead of zero-shot TabICL per protein.** It ties on AUPRC and
+  trails on AUC; its lead is a pooled-AUPRC lead, partly on proteins it had labels for.
+- **The two are complementary**, and stacking them is the strongest model this project has:
+  per-protein AUPRC 0.482 / AUC 0.876 on CB-full, 0.517 on the 184. It is no longer
+  zero-shot — its feature comes from a fine-tuned 3B model — so it is reported beside the
+  zero-shot headline, not in place of it.
+- **The practical recipe is cheap:** a fixed 50/50 rank blend of TabICL and the fine-tuned
+  score matches the stack per protein with nothing fitted.

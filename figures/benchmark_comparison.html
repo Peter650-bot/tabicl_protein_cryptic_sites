@@ -25,6 +25,7 @@
     --series-3: #1baf7a;
     --series-4: #eda100;
     --series-5: #e87ba4;
+    --series-6: #7a52c7;
     --shadow: 0 1px 2px rgba(16,19,18,.05), 0 8px 24px -16px rgba(16,19,18,.28);
   }
   @media (prefers-color-scheme: dark) {
@@ -47,6 +48,7 @@
       --series-3: #199e70;
       --series-4: #c98500;
       --series-5: #d55181;
+      --series-6: #9676e0;
       --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
     }
   }
@@ -69,6 +71,7 @@
     --series-3: #199e70;
     --series-4: #c98500;
     --series-5: #d55181;
+    --series-6: #9676e0;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
   }
 
@@ -111,6 +114,7 @@
   .swatch.s3 { background: var(--series-3); }
   .swatch.s4 { background: var(--series-4); }
   .swatch.s5 { background: var(--series-5); }
+  .swatch.s6 { background: var(--series-6); }
   .legend-item .nm { color: var(--ink); font-weight: 500; }
   .tag {
     font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
@@ -150,6 +154,7 @@
   .bar.s3 { fill: var(--series-3); }
   .bar.s4 { fill: var(--series-4); }
   .bar.s5 { fill: var(--series-5); }
+  .bar.s6 { fill: var(--series-6); }
   .hit { fill: transparent; cursor: default; outline: none; }
   .hit:hover ~ .bar, .hit:focus-visible ~ .bar { opacity: .74; }
   .hit:focus-visible { stroke: var(--ink); stroke-width: 1.5; }
@@ -226,7 +231,7 @@
   <header>
     <p class="eyebrow">CryptoBench · per-residue cryptic site prediction</p>
     <h1>Where TabICL stands against the published baselines</h1>
-    <p class="standfirst">Every method the CryptoBench paper reports, on every subset it reports them on, next to this project's two zero-shot TabICLv2 variants. Metrics are computed <strong>per structure then averaged</strong> — CryptoBench's own convention — so the columns are comparable. <strong>AUPRC leads</strong>: at 5.28&nbsp;% positives it is the only summary that reflects how hard the task actually is. Below the benchmark bars, a second view puts every model we ran — TabICL, LogisticRegression and RandomForest, across six feature sets and two training regimes — on one ladder.</p>
+    <p class="standfirst">Every method the CryptoBench paper reports, on every subset it reports them on, next to this project's two zero-shot TabICLv2 variants and a fine-tuned version of the 117-feature one. Metrics are computed <strong>per structure then averaged</strong> — CryptoBench's own convention — so the columns are comparable. <strong>AUPRC leads</strong>: at 5.28&nbsp;% positives it is the only summary that reflects how hard the task actually is. Below the benchmark bars, a second view puts every model we ran — TabICL, LogisticRegression and RandomForest, across six feature sets and two training regimes — on one ladder.</p>
   </header>
 
   <div class="legend" id="legend"></div>
@@ -271,7 +276,8 @@
   // dp = published precision. Our runs are measured to 3 dp; the CryptoBench
   // paper reports 2 dp, and rendering 0.86 as "0.860" would invent a digit.
   var METHODS = [
-    { id: "tabicl_esm",  slot: 1, dp: 3, name: "TabICLv2 + ESM",   ours: true },
+    { id: "tabicl_esm",  slot: 1, dp: 3, name: "TabICLv2 + ESM, zero-shot",  ours: true },
+    { id: "tabicl_ft",   slot: 6, dp: 3, name: "TabICLv2 + ESM, fine-tuned", ours: true },
     { id: "tabicl",      slot: 2, dp: 3, name: "TabICLv2, no pLM", ours: true },
     { id: "plmnn",       slot: 3, dp: 2, name: "pLM-NN" },
     { id: "p2rank",      slot: 4, dp: 2, name: "P2Rank" },
@@ -289,11 +295,13 @@
   var DATA = {
     full: {
       tabicl_esm:  { auprc: 0.441, auc: 0.862, mcc: 0.374, f1: 0.912, tpr: 0.559, fpr: 0.071 },
+      tabicl_ft:   { auprc: 0.444, auc: 0.863, mcc: 0.378, f1: 0.912, tpr: 0.571, fpr: 0.072 },
       tabicl:      { auprc: 0.388, auc: 0.848, mcc: 0.336, f1: 0.906, tpr: 0.515, fpr: 0.073 },
       plmnn:       { auprc: 0.36,  auc: 0.86,  mcc: 0.39,  f1: 0.92,  tpr: 0.48,  fpr: 0.05  }
     },
     p2apo: {
       tabicl_esm:  { auprc: 0.469, auc: 0.861, mcc: 0.392, f1: 0.914, tpr: 0.569, fpr: 0.068 },
+      tabicl_ft:   { auprc: 0.472, auc: 0.862, mcc: 0.397, f1: 0.915, tpr: 0.583, fpr: 0.070 },
       tabicl:      { auprc: 0.411, auc: 0.845, mcc: 0.350, f1: 0.910, tpr: 0.512, fpr: 0.068 },
       plmnn:       { auprc: 0.42,  auc: 0.88,  mcc: 0.43,  f1: 0.93,  tpr: 0.51,  fpr: 0.04  },
       p2rank:      { auprc: 0.21,  auc: 0.81,  mcc: 0.27,  f1: 0.81,  tpr: 0.62,  fpr: 0.14  }
@@ -309,17 +317,17 @@
 
   var METRICS = [
     { key: "auprc", label: "AUPRC", max: 0.6, ticks: [0, 0.2, 0.4, 0.6],
-      note: "The metric that separates the methods. With ESM the margin over pLM-NN is +0.120 on CB-full and +0.084 on CB-P2RANK-apo — far wider than the AUC gap below suggests." },
+      note: "The metric that separates the methods. With ESM the margin over pLM-NN is +0.081 on CB-full and +0.049 on CB-P2RANK-apo — far wider than the AUC gap below suggests. Fine-tuning adds only +0.003 on either subset, inside the paired-bootstrap noise." },
     { key: "auc", label: "AUC", max: 1.0, ticks: [0, 0.25, 0.5, 0.75, 1.0],
       note: "Everything clusters between 0.76 and 0.89. AUC flatters this task because 95 % of residues are trivial negatives; treat it as a sanity check, not a ranking." },
     { key: "mcc", label: "MCC", max: 0.5, ticks: [0, 0.25, 0.5],
-      note: "Threshold-dependent, so it reads each method at its own chosen operating point. Ours and pLM-NN are level on CB-P2RANK-apo (0.425 vs 0.43); the structure-only tools sit far below." },
+      note: "Threshold-dependent, so it reads each method at its own chosen operating point. pLM-NN still leads on MCC (0.392 zero-shot, 0.397 fine-tuned vs 0.43 on CB-P2RANK-apo); the structure-only tools sit far below." },
     { key: "f1", label: "F1 (weighted)", max: 1.0, ticks: [0, 0.25, 0.5, 0.75, 1.0],
       note: "Computed the way the paper computes it — a weighted average over both classes — so at 5.28 % positives it is governed by the 95 % of residues that are trivially negative. Every pLM-based row lands at 0.92–0.93; the column separates the structure-only tools and nothing else." },
     { key: "tpr", label: "TPR", max: 1.0, ticks: [0, 0.25, 0.5, 0.75, 1.0],
       note: "Recall alone is not a result — P2Rank's 0.62 and 0.84 are bought with the false-positive rates in the next panel. Read the two panels as one pair." },
     { key: "fpr", label: "FPR", max: 0.2, ticks: [0, 0.05, 0.1, 0.15, 0.2], lower: true,
-      note: "This is where P2Rank and PocketMiner pay for their recall — 0.14–0.16 against our 0.06. Our threshold was frozen on training folds targeting 0.05 and landed at 0.062 on test." }
+      note: "This is where P2Rank and PocketMiner pay for their recall — 0.14–0.16 against our 0.06. Our threshold was frozen on training folds targeting 0.05 and landed at 0.071 on test (0.072 fine-tuned)." }
   ];
 
   var W = 960, PL = 48, PR = 14, PT = 22, PB = 52, BAR = 24;
@@ -712,14 +720,15 @@
 
   /* ---------- notes ---------- */
   var NOTES = [
-    ["CB-PM", "Neither TabICL row appears on CB-PM, and that gap cannot be closed from the shipped data. The subset is defined by which 60 structures PocketMiner failed to run on — a property of that tool's run, not of the dataset. Reconstructing it means asking the CryptoBench authors for the structure list."],
+    ["CB-PM", "No TabICL row appears on CB-PM, and that gap cannot be closed from the shipped data. The subset is defined by which 60 structures PocketMiner failed to run on — a property of that tool's run, not of the dataset. Reconstructing it means asking the CryptoBench authors for the structure list."],
     ["CB-P2RANK-holo", "Shaded because it is a different task, not a harder split. P2Rank sees the ligand-bound (holo) structure, where the pocket is already open. It is included for completeness and must not be read as a fifth column of apo results."],
     ["The F1 column", "The paper computes F1 \u201cusing a weighted average\u201d over both classes, which is why pLM-NN\u2019s published F1 (0.92) tracks its ACC (0.93) rather than its TPR (0.48). Ours is computed identically \u2014 per structure, weighted, then averaged \u2014 so the bars are directly comparable. Our positive-class F1, the number that actually carries information, is 0.379 (117 feat) and 0.345 (53 feat) on CB-full; it is not comparable to this column and is deliberately not plotted beside it. Reproduce with scripts/f1_by_subset.py."],
     ["Thresholds", "Not a benchmark constant. pLM-NN used 0.95, PocketMiner 0.7, P2Rank emits binary calls with no threshold at all, and ours was selected on training folds targeting FPR 0.05. TPR, FPR and MCC therefore compare operating points each method chose for itself; AUC and AUPRC are threshold-free and compare rankings."],
     ["Comparability", "All rows are per-structure-then-averaged on CryptoBench's own test split — 231 apo structures, 76,753 residues, 5.28 % positive — matching the paper's Protein.py. CB-P2RANK-apo is the cleanest of the two apo columns for us: on that subset our evaluation unit and pLM-NN's are identical by construction."],
     ["Why LR and RF are not in the bars", "Our sklearn controls were evaluated on CB-full only, and the stored artifacts keep summary metrics rather than per-residue scores, so they cannot be re-scored on CB-P2RANK-apo. Adding them to the subset bars would have meant two more colour channels standing empty on three of four subsets. The dot strip is the honest form for them. Every row here is on the fixed sampler; the old-sampler runs that RESULTS.md \u00a7 3 keeps as the sampler bug\u2019s evidence were overwritten when those configurations were re-measured, so they have no stored artifact and are absent from this figure."],
     ["TabICL has no full-304k row", "Not an omission \u2014 304k labelled rows do not fit in an in-context window, so the full-304k rows are the sklearn models\u2019 best case. TabICL still leads them from 50k of context: LogisticRegression on all 304k reaches AUPRC 0.416 against TabICL\u2019s in-context 0.441. The lead is real and consistent \u2014 TabICL leads every one of the six conditions \u2014 but at 0.027\u20130.061 AUPRC it is still smaller than what the features do (0.343 \u2192 0.441), which is why the features rather than the model carry this result."],
-    ["What is not shown", "Both TabICL rows are zero-shot: no gradient step is taken on CryptoBench, and the ESM features are frozen embeddings rather than a fine-tuned network. The 53-feature row uses no protein language model at all, but it no longer clears the benchmark: its AUPRC 0.388 [0.356, 0.420] contains pLM-NN\u2019s 0.36, so it is a tie rather than a win. Only the 117-feature row beats pLM-NN, and only on AUPRC and TPR."]
+    ["Fine-tuned TabICL", "The purple bars load weights adapted with tabicl[finetune] (FinetunedTabICLClassifier, library defaults, early stopping on held-out proteins); everything else \u2014 context, threshold rule, test split \u2014 is the zero-shot protocol. It buys +0.003 AUPRC (paired-bootstrap 95 % CI [\u22120.002, +0.007]) and leaves the hard stratum unchanged, and it gives up the no-training property. A zero-shot control run alongside it reproduces the blue bars to 3 dp. Details in fine_tuned_tabicl/README.md."],
+    ["What is not shown", "The blue and orange TabICL rows are zero-shot: no gradient step is taken on CryptoBench, and the ESM features are frozen embeddings rather than a fine-tuned network. The 53-feature row uses no protein language model at all, but it no longer clears the benchmark: its AUPRC 0.388 [0.356, 0.420] contains pLM-NN\u2019s 0.36, so it is a tie rather than a win. Only the 117-feature row beats pLM-NN, and only on AUPRC and TPR."]
   ];
   var nh = document.getElementById("notes");
   NOTES.forEach(function (n, i) {

@@ -3,6 +3,7 @@
 Same numbers, same palette, same slot order. Regenerate with:
     python figures/make_benchmark_figure.py
 """
+import json
 from pathlib import Path
 
 import matplotlib
@@ -11,7 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 # ── palette (validated dataviz categorical slots, light steps) ───────────────
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#7a52c7"]
 INK, INK2, MUTED = "#101312", "#4f534f", "#8b8f8a"
 GRID, BASELINE, BAND = "#e6e8e2", "#c2c5bd", "#f2efe6"
 SURFACE = "#fcfcfb"
@@ -19,12 +20,16 @@ SURFACE = "#fcfcfb"
 # fixed slot order — colour follows the entity, never its rank.
 # dp = published precision: our runs are measured to 3 dp, the benchmark
 # paper reports 2 dp, and rendering 0.86 as "0.860" would invent a digit.
+# The fine-tuned row comes from fine_tuned_tabicl/ (deploy/finetune_modal.py).
+# Colour is the SERIES index in the last field, so inserting a method does not
+# repaint the ones already published.
 METHODS = [
-    ("tabicl_esm",  "TabICLv2 + ESM (this work)",   3),
-    ("tabicl",      "TabICLv2, no pLM (this work)", 3),
-    ("plmnn",       "pLM-NN (benchmark)",           2),
-    ("p2rank",      "P2Rank (benchmark)",           2),
-    ("pocketminer", "PocketMiner (benchmark)",      2),
+    ("tabicl_esm",  "TabICLv2 + ESM, zero-shot (this work)",  3, 0),
+    ("tabicl_ft",   "TabICLv2 + ESM, fine-tuned (this work)", 3, 5),
+    ("tabicl",      "TabICLv2, no pLM (this work)",           3, 1),
+    ("plmnn",       "pLM-NN (benchmark)",                     2, 2),
+    ("p2rank",      "P2Rank (benchmark)",                     2, 3),
+    ("pocketminer", "PocketMiner (benchmark)",                2, 4),
 ]
 SUBSETS = [
     ("full",  "CB-full",        "231 apo structures",           False),
@@ -44,6 +49,20 @@ DATA = {
               "pocketminer": dict(auprc=.19,  auc=.76,  mcc=.22,  f1=.78,  tpr=.51,  fpr=.16)},
     "holo":  {"p2rank":      dict(auprc=.34,  auc=.89,  mcc=.38,  f1=.81,  tpr=.84,  fpr=.15)},
 }
+
+# Fine-tuned bars are read from the run's own output, not copied by hand.
+_FT = json.loads((Path(__file__).resolve().parent.parent / "fine_tuned_tabicl"
+                  / "result_finetuned_esm64.json").read_text())
+
+
+def _row(r):
+    return dict(auprc=r["AUPRC"], auc=r["AUC"], mcc=r["MCC"],
+                f1=r["F1_weighted"], tpr=r["TPR"], fpr=r["FPR"])
+
+
+DATA["full"]["tabicl_ft"] = _row(_FT["result"])
+DATA["p2apo"]["tabicl_ft"] = _row(_FT["result_cb_p2rank_apo"])
+
 METRICS = [
     ("auprc", "AUPRC", 0.60, [0, .2, .4, .6],       False),
     ("auc",   "AUC",   1.00, [0, .25, .5, .75, 1.], False),
@@ -61,7 +80,7 @@ plt.rcParams.update({
     "savefig.facecolor": SURFACE,
 })
 
-fig, axes = plt.subplots(4, 2, figsize=(14.6, 13.6))
+fig, axes = plt.subplots(4, 2, figsize=(16.4, 13.6))
 fig.subplots_adjust(left=.055, right=.985, top=.918, bottom=.035, hspace=.62, wspace=.13)
 
 SLOT, BARW = 1.0, 0.62  # one slot per method; absent methods keep their slot
@@ -71,7 +90,7 @@ for ax, (key, label, ymax, ticks, lower) in zip(axes.ravel(), METRICS):
         x0 = si * len(METHODS)
         if flag:
             ax.axvspan(x0 - .5, x0 + len(METHODS) - .5, color=BAND, zorder=0, lw=0)
-        for mi, (mid, _, dp) in enumerate(METHODS):
+        for mi, (mid, _, dp, ci) in enumerate(METHODS):
             x = x0 + mi
             row = DATA[sid].get(mid)
             v = row[key] if row else None
@@ -79,9 +98,12 @@ for ax, (key, label, ymax, ticks, lower) in zip(axes.ravel(), METRICS):
                 ax.text(x, ymax * .012, "–", ha="center", va="bottom",
                         color=MUTED, fontsize=9, zorder=3)
                 continue
-            ax.bar(x, v, width=BARW, color=SERIES[mi], zorder=3)
-            ax.text(x, v + ymax * .028, f"{v:.{dp}f}", ha="center", va="bottom",
-                    color=INK2, fontsize=6.4, zorder=4, fontfamily="monospace")
+            ax.bar(x, v, width=BARW, color=SERIES[ci], zorder=3)
+            # Six slots per group leave no room for "0.441"; the leading zero
+            # carries no information on a 0-1 metric, so it is dropped.
+            ax.text(x, v + ymax * .028, f"{v:.{dp}f}".lstrip("0"), ha="center",
+                    va="bottom", color=INK2, fontsize=6.4, zorder=4,
+                    fontfamily="monospace")
         ax.text(x0 + (len(METHODS) - 1) / 2, -ymax * .105, sname, ha="center", va="top",
                 fontsize=8.4, color=INK, fontweight="medium")
         ax.text(x0 + (len(METHODS) - 1) / 2, -ymax * .20, ssub, ha="center", va="top",
@@ -107,9 +129,10 @@ for ax, (key, label, ymax, ticks, lower) in zip(axes.ravel(), METRICS):
 # legend + caveats occupy the sixth cell
 lax = axes.ravel()[6]
 lax.axis("off")
-lax.legend(handles=[Patch(facecolor=SERIES[i], label=n) for i, (_, n, _dp) in enumerate(METHODS)],
-           loc="upper left", bbox_to_anchor=(-.02, 1.02), frameon=False,
-           fontsize=9, labelspacing=.85, handlelength=1.1, handleheight=1.1)
+lax.legend(handles=[Patch(facecolor=SERIES[ci], label=n) for (_, n, _dp, ci) in METHODS],
+           loc="upper left", bbox_to_anchor=(-.02, 1.02), frameon=False, ncol=2,
+           fontsize=9, labelspacing=.85, columnspacing=1.6, handlelength=1.1,
+           handleheight=1.1)
 lax.text(-.02, .40,
          "–  method not evaluated on that subset.\n"
          "CB-PM is defined by which structures PocketMiner failed on, so it\n"
@@ -134,7 +157,9 @@ nax.text(-.02, 1.02,
          "comparable to the published column and is deliberately not plotted\n"
          "beside it.\n\n"
          "Reproduce every value above with:\n"
-         "    python scripts/f1_by_subset.py",
+         "    python scripts/f1_by_subset.py\n"
+         "Fine-tuned bars: fine_tuned_tabicl/ (deploy/finetune_modal.py);\n"
+         "its zero-shot control reproduces the blue bars to 3 dp.",
          transform=nax.transAxes, fontsize=7.6, color=INK2, va="top", linespacing=1.6)
 
 fig.suptitle("Per-residue cryptic site prediction on CryptoBench",

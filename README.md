@@ -47,6 +47,34 @@ features are frozen embeddings, not a fine-tuned network. No holo structure at
 prediction time — and, since the 2026-09-10 corrections, no quantity *derived* from one
 either (RESULTS.md § 9.1).
 
+**Against the newer fine-tuned ESM-2 (2026-10-06).** Two 2025–26 papers (Škrhák et al.,
+*Hidden in protein sequences*, ACM BCB 2025; *Seq2Pocket*, bioRxiv 2026) fine-tune ESM-2 3B
+on CryptoBench and report pooled AUC 0.894 / AUPRC 0.475 on the 184 single-chain test
+structures. Their released model, rerun here and reproducing those numbers to ≤ 0.0003, was
+scored per protein by this pipeline:
+
+| CB-full (231), per protein | AUC | AUPRC |
+|---|---|---|
+| their fine-tuned ESM-2 (released) | 0.839 | 0.446 |
+| **TabICLv2, zero-shot (this work)** | **0.862** | 0.441 |
+| **stack: TabICLv2 + out-of-fold fine-tuned score** | **0.876** | **0.482** |
+
+- **Per protein, the published state of the art ties this project on AUPRC and trails it
+  on AUC** (−0.023 [−0.039, −0.006]). Its only significant lead is pooled AUPRC on the 184
+  (0.475 vs 0.398) — the one number its papers report.
+- **Their training recipe leaks test labels.** Its LIGYSIS pre-training set still holds 28
+  CryptoBench test proteins; for 25 of them, 63 % of the cryptic residues are labelled
+  binding. The measured effect on their scores is small, but it is there in the data.
+- **The two models are complementary.** Rebuilding their recipe from the authors' data,
+  retraining it per fold (≈ $15 of GPU, with the leaked LIGYSIS proteins removed) and
+  feeding the out-of-fold score to TabICL as a 118th feature beats the fine-tuned model
+  (+0.032 per-protein AUPRC) and zero-shot TabICL (+0.041), with the threshold still
+  transferring (test FPR 0.073). A fixed 50/50 rank blend of the two matches the stack per
+  protein with nothing fitted; the stack wins on pooled metrics.
+- The stack is not zero-shot and is reported beside the headline, not in place of it.
+
+Full record: RESULTS.md § 13; log and every gate: [`finetuned_esm/PLAN.md`](finetuned_esm/PLAN.md).
+
 **Two wins, two ties, two losses.** Against pLM-NN on CB-full we beat it on AUPRC and
 TPR by margins that survive resampling the test proteins; we tie on AUC and MCC; and we
 are genuinely worse on FPR and weighted F1 — we run at a looser operating point. Bolded
@@ -363,7 +391,9 @@ cryptic_tabicl/
 ├── build_table.py         orchestration → parquet, with join instrumentation
 ├── sampling.py            negative subsampling under TabICL's context budget
 ├── model.py               zero-shot TabICL wrapper
-└── evaluate.py            per-protein metrics, comparable to the paper
+├── evaluate.py            per-protein metrics, comparable to the paper
+├── feature_sets.py        named feature-set arms (incl. the s2p stacking arms)
+└── s2p_inputs.py          Škrhák et al.'s sequence extraction, replicated, joined on author keys
 
 deploy/
 ├── evaluate_modal.py         GPU evaluation on Modal
@@ -371,7 +401,11 @@ deploy/
 ├── esm_modal.py              ESM-2 embeddings + train-only PCA
 ├── context_bootstrap.py      context-seed variance for TabICL
 ├── context_ensemble_modal.py multi-context averaging
-└── finetune_modal.py         tabicl[finetune] ceiling run → fine_tuned_tabicl/
+├── finetune_modal.py         tabicl[finetune] ceiling run → fine_tuned_tabicl/
+├── finetuned_esm_modal.py    the released fine-tuned ESM-2, scored on every chain
+├── s2p_finetune_modal.py     their plain and full (multitask + LIGYSIS) recipes, per fold
+├── s2p_models.py, finetuning_utils.py   their code, vendored verbatim (MIT)
+└── s2p_stack.py              TabICL with the out-of-fold score as a feature
 
 scripts/
 ├── fetch_cryptobench.py   annotations
@@ -381,7 +415,9 @@ scripts/
 ├── compare_variants.py    every run in one table
 ├── bootstrap_test.py      test-set CIs
 ├── f1_by_subset.py        CB-full / CB-P2RANK-apo, with the published F1 convention
-└── cryptosite_testset.py  the 14-pair CryptoSite external test set
+├── cryptosite_testset.py  the 14-pair CryptoSite external test set
+└── s2p_*.py               fine-tuned ESM-2 work: input rebuild, reproduction, per-protein
+                           evaluation, blend, LIGYSIS overlap audit, stack report
 
 figures/
 ├── make_benchmark_figure.py   the published-benchmark bars  → benchmark_comparison.{png,pdf}
@@ -403,6 +439,9 @@ knob_sweep/                the TabICL constructor-knob sweep: per-config results
 
 feature_sweep/             the feature screen: ten arms on one CV fold, the free
                            four-fold sklearn proxy, and why all ten are negative
+
+finetuned_esm/             the fine-tuned ESM-2 comparison: PLAN.md (log, gates, every
+                           number), pre-registrations (frozen*.json), per-step results
 
 tests/                     leakage guards, label logic, sampler invariants,
                            fpocket parsing, conservation join, ESM index bookkeeping
@@ -661,6 +700,11 @@ Modal client dropped its connection. Both are fixed and described in § 9.5.
   been run
 - **Side-chain and loop motion** — the one thing that plausibly moves the hard stratum,
   and the one thing harmonic ANM modes cannot produce
+
+Since 2026-10-06 the one lever that moved the ranking metrics is an external one: a
+fine-tuned ESM-2 score as a feature (+0.041 per-protein AUPRC; RESULTS.md § 13). The
+already-open-pocket stratum is the natural place to check whether it helps where TabICL is
+weakest — not yet measured.
 
 The cheap levers are now exhausted, and that now includes features. Weights
 (fine-tuning), inference knobs (the sweep), the decision rule and ten feature sets have
