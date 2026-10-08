@@ -1,0 +1,30 @@
+{
+ "step": 10,
+ "written": "2026-10-08, while the four cleantest fine-tunes were training; before any TabICL job of step 10 ran",
+ "question": "Does TabICL do better given the fine-tuned ESM-2's own last hidden state (64 PCs) than given the frozen ESM-2 PCs, or than given the fine-tuned score?",
+ "fold_models": "cleantest_0..3 (run s2p_full_cleantest_20261008): the full recipe, CryptoBench train folds != k, LIGYSIS minus homologs of train fold k AND of test (ligysis_exclusions.json, union)",
+ "embedding": "last hidden state (2560-d, fp16) of model k on train fold k + test chains; PCA(64, random_state=0) fit on fold-k chains only",
+ "table": "build/residues_ftemb.parquet = residues_esm64.parquet + blocks ftk{k}_pc00..63, ftk{k}_score (scripts/ftemb_build_table.py; sha256 in step10_ftemb_table.json)",
+ "harness": "deploy/ftemb_stack.py; tabicl 2.1.1, seed 0, budget 50k, sampling.build_context on the context rows",
+ "design": "cross-fitted: a job with block k takes its context from train fold k and queries test; the test score of an arm is the mean of its four predictions k=0..3. Every arm, the control included, uses these same contexts.",
+ "arms": {
+  "control": "the published 117 (frozen ESM PCs)",
+  "ft117": "53 structural/ensemble/conservation + 64 fine-tuned PCs in place of the frozen PCs (primary)",
+  "ft64only": "the 64 fine-tuned PCs alone",
+  "score118": "117 + the fold model's own score"
+ },
+ "references": {
+  "ft_alone": "mean of the four fold models' own scores on test",
+  "tabicl_117": "the published headline (context: all four folds)",
+  "s2pfull_117": "step 9's stack (context: all four folds, out-of-fold score)"
+ },
+ "thresholds": "per fold model k: out-of-fold scores of 4 protein sub-folds of fold k (sampling.protein_subfolds, seed 0), threshold at mean per-protein FPR 0.05; frozen = median over k; applied to the averaged test score. Threshold metrics are secondary: the averaged score's distribution differs from a single context's.",
+ "criterion": "paired 95 % bootstrap CI (10,000 protein resamples, seed 0) of per-protein AUPRC on CB-full (231 proteins) excludes zero, above",
+ "claims": {
+  "primary": "ft117 - control",
+  "secondary_1": "ft117 - score118",
+  "secondary_2": "ft64only - ft_alone"
+ },
+ "context_not_claimed": ["score118 - control", "ft117 - s2pfull_117", "score118 - s2pfull_117", "control - tabicl_117", "everything on CB-P2RANK-apo (184) and pooled"],
+ "expectation": "a null on the primary is plausible: supervised ESM projections hurt before (RESULTS.md, PLS), and the score is one exact linear direction of this embedding that a 64-PC PCA may dilute"
+}

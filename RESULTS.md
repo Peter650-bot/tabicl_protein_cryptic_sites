@@ -1507,7 +1507,38 @@ the 206 test proteins outside the LIGYSIS leak:
 | TabICL-117 | 0.443 | 0.372 | +0.001 [−0.023, +0.025] | −0.010 [−0.053, +0.031] |
 | released model | 0.442 | 0.382 | — | — |
 
-### 13.8 What this changes
+### 13.8 The fine-tuned embedding instead of the score (step 10, 2026-10-08)
+
+Can TabICL read the fine-tuned model's **final embedding** (its 2,560-d last hidden state)
+directly, instead of its score? Two constraints shape the test. A fine-tuned model's
+embeddings of its own training proteins are fit to their labels. And each fine-tuned model has
+its own embedding space. So the design is **cross-fitted**: four new fold models
+(`cleantest_k`, the full recipe with LIGYSIS homologs of fold *k* and of test removed) each
+embed the fold they never saw, which becomes TabICL's context, and the test set. 64 PCs are fit
+on that fold only. The four test predictions are averaged. Every arm, the control included, uses
+the same contexts. Pre-registered in `finetuned_esm/frozen_step10.json`. Full log: PLAN.md
+step 10.
+
+| CB-full (231), per protein | AUPRC | AUC | pooled AUPRC |
+|---|---|---|---|
+| **53 features + 64 fine-tuned PCs** (`ft117`) | **0.486** | 0.872 | **0.424** |
+| 117 + fine-tuned score (`score118`) | 0.485 | 0.873 | 0.420 |
+| 64 fine-tuned PCs alone (`ft64only`) | 0.451 | 0.847 | 0.393 |
+| control, the published 117 (same contexts) | 0.438 | 0.860 | 0.349 |
+| fine-tuned models alone (mean of 4) | 0.454 | 0.841 | 0.409 |
+| step 9 stack (`s2pfull_117`), for reference | 0.482 | 0.876 | 0.421 |
+
+- **Fine-tuned PCs in place of frozen PCs: +0.048 [+0.033, +0.062]** per-protein AUPRC
+  (primary claim, holds).
+- **No better than the score:** ft117 − score118 +0.001 [−0.005, +0.008]. The embedding
+  gives TabICL nothing the single score column does not.
+- **TabICL on the embedding alone only matches the fine-tuned head**, −0.004 [−0.011,
+  +0.004]. The gain comes from combining it with the structural features.
+- **Ties step 9's stack**, +0.003 [−0.005, +0.012]. Averaging four 31 k-row fold contexts
+  matches one 50 k context (control vs headline −0.003 [−0.010, +0.004]).
+
+### 13.9 What this changes
+
 
 - **The published SOTA is not ahead of zero-shot TabICL per protein.** It ties on AUPRC and
   trails on AUC; its lead is a pooled-AUPRC lead, partly on proteins it had labels for.

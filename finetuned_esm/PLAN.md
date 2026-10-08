@@ -520,3 +520,131 @@ pooled AUPRC: **s2pfull_117 0.480 / 0.424**; released 0.442 / 0.382; TabICL-117 
 **+0.038 [+0.021, +0.055]**, pooled **+0.043 [+0.012, +0.072]**.
 
 Cost of step 9: data fetch/extract ≈ $1; six full-recipe fine-tunes ≈ $10.7; TabICL ≈ $1.
+
+## Step 10 — the fine-tuned model's embeddings as TabICL features, 2026-10-08
+
+**Question (the user's):** instead of the fine-tuned model's *score* (step 9), feed TabICL its
+*final embeddings* — the 2,560-dim last hidden state the cryptic head reads.
+
+**Two constraints fix the design.**
+- In-sample leak: a fine-tuned model's embeddings of its own training proteins are fit to their
+  labels, so TabICL's context must come from proteins the embedding model never trained on.
+- Each fine-tuned model has its own embedding space (a score means the same thing across fold
+  models; a hidden state does not), so context and query must be embedded by the **same** model.
+
+**Design — cross-fitted contexts.** Fold model *k* never saw train fold *k*: context = fold *k*,
+query = test, both embedded by model *k*; 64 PCs fit on fold-*k* rows only (unsupervised, as the
+frozen PCs). k = 0..3 give four test predictions, averaged. Raw 2,560 columns are far outside
+TabICL's pretraining range, hence the PCA.
+
+**New fold models, `cleantest`** (the user's choice over reusing `clean_0..3`, which dropped only
+their own fold's LIGYSIS homologs and so saw labels for ~25 test proteins): LIGYSIS exclusions =
+`exclude[train-fold-k] ∪ exclude[test]`. Same recipe, same code (`finetune_full`); the job also
+dumps hidden states for fold *k* + test and the PCA (`_embed_and_reduce`).
+Nothing already computed is recomputed (the user's instruction): steps 8–9 tables, scores and
+the 117-feature CV/test results are reused as they are.
+
+- **10a gate:** each cleantest_k's held-out-fold single-chain per-protein AUPRC within ±0.03 of
+  clean_k (0.425 / 0.453 / 0.442 / 0.420); losses finite.
+- **10b gate (alignment):** the cryptic head re-applied to the stored fp16 hidden states
+  reproduces the job's own scores (max |Δp| < 1e-2) — row *i* is residue *i*.
+- **10c–e:** table `residues_ftemb.parquet`; arms `ctrl117` (paired control, same fold-*k*
+  contexts), `ft117` (53 + 64 fine-tuned PCs, primary), `ft64only`, `score118` (117 + model-*k*
+  score); harness `deploy/ftemb_stack.py`; claims pre-registered in `frozen_step10.json` before
+  the test stage.
+
+**Expectation, written before any result:** supervising the ESM projection hurt before (§ PLS in
+RESULTS.md), and the score is already one exact linear direction of this embedding that PCA may
+dilute. A null is plausible.
+
+**Pre-registered** `frozen_step10.json`, sha256 `707f56c46d301f30699dbdb3dacd3dfa3c1c4c1e8446561e30c0333e7c1b6d19` (pinned in `scripts/ftemb_report.py`), written while the fine-tunes trained and before any step-10 TabICL job.
+
+### 10a — PASSED, 2026-10-08
+Run `s2p_full_cleantest_20261008`, A100-80GB, 31–44 min and $1.28–1.81 per job ($5.72 together,
+embedding included). LIGYSIS extra exclusions 152 / 140 / 135 / 149 (fold ∪ test). Losses finite.
+Single-chain per-protein AUPRC (`step10_check_cleantest_{0..3}.json`):
+
+| model | its held-out fold | clean_k (step 9) | its training folds | test |
+|---|---|---|---|---|
+| cleantest_0 | **0.419** | 0.425 | 0.633–0.665 | 0.466 |
+| cleantest_1 | **0.460** | 0.453 | 0.610–0.622 | 0.476 |
+| cleantest_2 | **0.437** | 0.442 | 0.620–0.655 | 0.468 |
+| cleantest_3 | **0.420** | 0.420 | 0.664–0.686 | 0.471 |
+
+### 10b — PASSED, 2026-10-08
+Cryptic head on the stored fp16 hidden states vs the job's own scores: max |Δp| 1.02e-4 on all
+four models (149–156 k residues each). PCA fit on exactly the fold-k residues (75,814 / 77,729 /
+79,097 / 72,352); 64 PCs explain 45 / 43 / 49 / 43 % of variance (frozen ESM-2: see esm_modal).
+
+### 10c — table built, 2026-10-08
+`build/residues_ftemb.parquet` (381,704 rows, 386 columns, sha256 `4afaaa22…e13f`;
+`step10_ftemb_table.json`). Every fold-k and test row has its block-k values. Local dry run of
+`deploy/ftemb_stack.py::select`: no NaN in any used column, no context/query protein overlap;
+fold-k contexts are ~31 k rows (226 proteins; the negative ratio binds, not the 50 k budget),
+sub-fold contexts ~23 k.
+
+### 10d — determinism gate PASSED, 2026-10-08
+Control on train-fold-0 from `residues_ftemb.parquet` with the standard context equals
+`build/cv_scores/k64_train-fold-0.json` exactly (max |diff| 0.0, 75,800 rows, same order).
+CV (64 jobs) and test (16 jobs) spawned together as run `fe1`; the report computes and writes
+thresholds from CV before reading any test score.
+
+### 10e — SCORED ONCE, 2026-10-08
+Run `fe1` (81 T4 jobs incl. the gate). `scripts/ftemb_report.py --run-id fe1` →
+`step10_thresholds.json` (written from CV before test was read), `step10_result.json`.
+Arms are the mean of four cross-fitted predictions (context = train fold k, embedded by
+cleantest_k); `ft_alone` = mean of the four fold models' own scores.
+
+| CB-full (231) | **ft117** | ft64only | score118 | control | ft_alone | TabICL-117 | s2pfull_117 |
+|---|---|---|---|---|---|---|---|
+| per-protein AUC | 0.872 | 0.847 | 0.873 | 0.860 | 0.841 | 0.862 | **0.876** |
+| per-protein AUPRC | **0.486** | 0.451 | 0.485 | 0.438 | 0.454 | 0.441 | 0.482 |
+| pooled AUC | 0.903 | 0.881 | **0.905** | 0.884 | 0.882 | 0.885 | **0.905** |
+| pooled AUPRC | **0.424** | 0.393 | 0.420 | 0.349 | 0.409 | 0.360 | 0.421 |
+
+| CB-P2RANK-apo (184) | **ft117** | ft64only | score118 | control | ft_alone | TabICL-117 | s2pfull_117 |
+|---|---|---|---|---|---|---|---|
+| per-protein AUPRC | **0.520** | 0.482 | **0.520** | 0.467 | 0.485 | 0.469 | 0.517 |
+| pooled AUC | 0.906 | 0.893 | **0.908** | 0.882 | 0.894 | 0.883 | 0.907 |
+| pooled AUPRC | 0.488 | 0.468 | 0.485 | 0.390 | **0.489** | 0.398 | 0.476 |
+
+**Pre-registered claims** (per-protein AUPRC, CB-full, paired 95 % CI):
+- **Primary PASSES:** ft117 − control **+0.048 [+0.033, +0.062]**. Replacing the frozen ESM-2
+  PCs with 64 PCs of the fine-tuned model's own embedding is a large gain (pooled AUPRC
+  +0.074 [+0.048, +0.099]; per-protein AUC +0.012 [+0.005, +0.019]).
+- **Secondary 1 does not pass:** ft117 − score118 +0.001 [−0.005, +0.008]. The embedding
+  carries no more than the score does: 64 PCs of it and the one score column are tied on every
+  metric (pooled AUC favours the score by 0.002).
+- **Secondary 2 does not pass:** ft64only − ft_alone −0.004 [−0.011, +0.004]. TabICL on the
+  embedding alone only matches the fine-tuned head it was taken from (per-protein AUC +0.005
+  [+0.001, +0.010]; pooled AUPRC −0.017 [−0.034, +0.000]). It is the structural features that
+  add, not TabICL re-reading the embedding.
+
+**Context, not claimed.**
+- ft117 vs step 9's s2pfull_117: +0.003 [−0.005, +0.012] per-protein AUPRC — a tie. 0.486 is
+  the highest per-protein AUPRC this project has measured, but not distinguishably so.
+- The cross-fitted design costs nothing: control (four 31 k fold contexts, averaged) equals
+  the 50 k headline, −0.003 [−0.010, +0.004] per protein. Each single fold context alone is
+  worse (control 0.406–0.416, ft117 0.447–0.455); averaging four is worth ~+0.03, i.e. the
+  four-context ensemble recovers what the smaller contexts lose.
+- On the papers' metric (pooled AUPRC, 184): ft117 0.488, ft_alone 0.489, released model 0.475
+  (published), all clean of the LIGYSIS leak except the last.
+- Threshold metrics (CV-frozen, secondary): ft117 TPR 0.515 at FPR 0.046, MCC 0.398;
+  control 0.450 / 0.044 / 0.353.
+
+**Reading.** The fine-tuned model's information reaches TabICL equally well as one score
+column or as 64 PCs of its hidden state; whichever form, it adds ~+0.045 per-protein AUPRC
+over the frozen-PC model, and the result lands where step 9's stack already was. The embedding
+route is not a better way in, it is an equivalent one, at the price of four fold models with
+test-clean LIGYSIS and a cross-fitted context.
+
+Cost of step 10: fine-tunes + embedding $5.72; TabICL 81 T4 jobs, ≈ 3.0 GPU-h of scoring (≈ $1.8, plus container start-up). Total ≈ $8.
+
+### Final comparison figure, 2026-10-08
+`scripts/final_comparison.py` → `final_comparison.json`; `scripts/final_comparison_figure.py`
+→ `../Stacked_Figures/final_comparison.{pdf,png}`. Released model, fixed rank blend, step-9
+stack, ft117 on CB-P2RANK-apo (184), all 7 metrics pooled and per protein, from scores
+already computed. Gate: the released model on their own file rounds to every number in
+the Hidden paper (0.894 / 0.475 / 0.472) and is within 0.0005 of their notebook. On these 184
+it gives 0.8935 / 0.4751 / 0.4719 / F1w 0.9389 / ACC 0.9350; the residual is the 5 residues
+our table lacks. The three other rows reproduce their step-9/10 values.

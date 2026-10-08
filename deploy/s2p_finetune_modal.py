@@ -178,7 +178,66 @@ def _score_items(model, tok, items, head_is_tuple: bool):
     return pd.concat(frames, ignore_index=True)
 
 
-@app.function(image=image, gpu=GPU, timeout=8 * 3600, retries=0, volumes={VOL_ROOT: vol})
+N_EMB_PCS = 64
+
+
+def _embed_and_reduce(model, tok, items, fit_keys, scores, out_dir: str, name: str) -> dict:
+    """Step 10: the last hidden state (what the cryptic head reads) for `items`, plus a
+    64-component PCA fit on the chains in `fit_keys` only -- the model's held-out fold,
+    i.e. the rows that will be TabICL's context. Unsupervised, like the frozen ESM PCs.
+
+    Alignment gate: the cryptic head re-applied to the STORED fp16 hidden states must
+    reproduce the job's own scores (a separate forward pass) residue for residue.
+    """
+    import numpy as np
+    import pandas as pd
+    import torch
+    from esm_embed import chunk_spans
+    from sklearn.decomposition import PCA
+
+    model.eval()
+    hid, keys = [], []
+    with torch.no_grad():
+        for apo_id, chain, seq in items:
+            parts = []
+            for start, end, ks, ke in chunk_spans(len(seq)):
+                enc = tok(seq[start:end], return_tensors="pt")
+                h = model.llm(**{k: v.cuda() for k, v in enc.items()}).last_hidden_state[0, 1:-1]
+                assert h.shape[0] == end - start
+                parts.append(h[ks - start: ke - start].cpu())
+            h = torch.cat(parts)
+            assert h.shape[0] == len(seq)
+            hid.append(h)
+            keys.append(pd.DataFrame({"apo_id": apo_id, "chain": chain, "pos": range(len(seq))}))
+        H = torch.cat(hid)                                   # fp16, (n, 2560)
+        w = model.classifier.weight.float().cpu()
+        b = model.classifier.bias.float().cpu()
+        prob = torch.sigmoid(H.float() @ w.T + b)[:, 0].numpy()
+    index = pd.concat(keys, ignore_index=True)
+    chk = index.assign(p_hidden=prob).merge(scores, on=["apo_id", "chain", "pos"],
+                                            how="left", validate="1:1")
+    assert chk["score"].notna().all()
+    max_diff = float(np.abs(chk["p_hidden"] - chk["score"]).max())
+    assert max_diff < 1e-2, f"head on stored hidden != job score (max |dp| {max_diff})"
+
+    H = H.numpy()
+    np.save(f"{out_dir}/hidden_{name}.npy", H)
+    index.to_parquet(f"{out_dir}/hidden_index_{name}.parquet", index=False)
+    fit = pd.MultiIndex.from_frame(index[["apo_id", "chain"]]).isin(
+        pd.MultiIndex.from_tuples([tuple(k) for k in fit_keys]))
+    pca = PCA(n_components=N_EMB_PCS, random_state=0).fit(H[fit].astype(np.float32))
+    Z = pca.transform(H.astype(np.float32)).astype(np.float32)
+    pcs = index.assign(score=chk["score"].to_numpy(),
+                       **{f"ftpc_{i:02d}": Z[:, i] for i in range(N_EMB_PCS)})
+    pcs.to_parquet(f"{out_dir}/ftemb_{name}.parquet", index=False)
+    return {"n_embedded": int(len(index)), "n_pca_fit": int(fit.sum()),
+            "pca_explained_cum": float(pca.explained_variance_ratio_.sum()),
+            "pca_explained_first8": [round(float(x), 4) for x in pca.explained_variance_ratio_[:8]],
+            "gate_max_abs_dprob": max_diff}
+
+
+@app.function(image=image, gpu=GPU, timeout=8 * 3600, retries=0, volumes={VOL_ROOT: vol},
+              memory=32768)
 def finetune_full(job: dict) -> dict:
     """Their multitask + LIGYSIS recipe (train.ipynb cell 16), both stages, one session.
 
@@ -289,7 +348,11 @@ def finetune_full(job: dict) -> dict:
     scores.to_parquet(f"{out_dir}/scores_{name}.parquet", index=False)
     if job.get("save_weights"):
         torch.save(model.state_dict(), f"{out_dir}/model_{name}.pt")
+    vol.commit()
+    emb = (_embed_and_reduce(model, tok, job["embed_items"], job["pca_fit_keys"], scores,
+                             out_dir, name) if job.get("embed_items") else None)
     meta = {"name": name, "run_id": run_id, "recipe": "full", "variant": job["variant"],
+            "embedding": emb,
             "n_ligysis_lines": len(lig_lines), "n_ligysis_trained": lig_ds.num_rows,
             "n_ligysis_excluded_extra": len(excl), "n_cb_lines": len(cb_lines),
             "n_cb_trained": cb_ds.num_rows, "epochs": log, "train_seconds": train_seconds,
@@ -448,12 +511,30 @@ def main(pilot: bool = False, spawn: bool = False, jobs: str = "", run_id: str =
 
         ff = modal.Function.from_name("cryptobench-s2p-finetune", "finetune_full")
         excl = json.loads(Path("finetuned_esm/ligysis_exclusions.json").read_text())["exclude"]
-        names = ["0"] if pilot else jobs.split(",")
+        # Step 10 `cleantest`: a fold model that is clean of its held-out fold AND of test,
+        # so it can embed both TabICL's context (its fold) and the query (test).
+        fold_of = (pd.read_parquet("build/residues_esm64.parquet", columns=["apo_id", "chain", "fold"])
+                   .drop_duplicates().set_index(["apo_id", "chain"])["fold"])
+        names = jobs.split(",")
+        if pilot and variant == "cleantest":     # 1a4uB is fold 2; add two test chains
+            names = ["2"]
+            pilot_items = pilot_items + [it for it in items
+                                         if fold_of[(it[0], it[1])] == "test"][:2]
+        elif pilot:
+            names = ["0"]
         for job in _jobs(names, "pilot_full" if pilot else run_id,
                          pilot_items if pilot else items, limit=20 if pilot else 0):
             held = "test" if job["name"] == "all" else f"train-fold-{job['name']}"
             job["variant"] = variant
-            job["ligysis_exclude"] = excl[held] if variant == "clean" else []
+            job["ligysis_exclude"] = (excl[held] if variant == "clean" else
+                                      sorted(set(excl[held]) | set(excl["test"]))
+                                      if variant == "cleantest" else [])
+            if variant == "cleantest":
+                assert held != "test", "cleantest is for fold models"
+                fk = {k for k, f in fold_of.items() if f == held}
+                tk = {k for k, f in fold_of.items() if f == "test"}
+                job["embed_items"] = [it for it in job["items"] if (it[0], it[1]) in fk | tk]
+                job["pca_fit_keys"] = sorted(fk)
             job["name"] = f"{variant}_{job['name']}"
             call = ff.spawn(job)
             print(f"spawned full/{job['name']} (CB folds {job['train_folds']}, "

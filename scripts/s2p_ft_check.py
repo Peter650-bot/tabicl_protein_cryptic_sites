@@ -86,7 +86,9 @@ def main() -> None:
             t = TARGETS[a.gate]
             res["gate"] = {"recipe": a.gate, "their_test_pooled": r, "target": t, "tolerance": TOL,
                            "passes": all(abs(r[m] - t[m]) <= TOL[m] for m in t)}
-    out = Path(f"finetuned_esm/{'step9' if a.gate == 'full' or '_' in a.name else 'step8'}_check_{a.name}.json")
+    step = ("step10" if a.name.startswith("cleantest") else
+            "step9" if a.gate == "full" or "_" in a.name else "step8")
+    out = Path(f"finetuned_esm/{step}_check_{a.name}.json")
     out.write_text(json.dumps(res, indent=1, default=float))
     print(pd.DataFrame(res["by_fold"]).to_string(index=False))
     if "their_test_pooled" in res:

@@ -104,6 +104,13 @@ S2P_OOF: Tuple[str, ...] = ("s2p_oof",)
 # The same, from their full multitask + LIGYSIS recipe with test/fold-homologous LIGYSIS
 # proteins removed (PLAN.md step 9, `clean` variant).
 S2PFULL_OOF: Tuple[str, ...] = ("s2pfull_oof",)
+# Step 10: the fine-tuned model's own embedding, 64 PCs of its last hidden state, and
+# its score. The table carries one block per fold model (`ftk{k}_pc00..63`, `ftk{k}_score`);
+# the harness renames block k to these generic names for jobs whose context is fold k,
+# because each fold model has its own embedding space.
+FT_PCS: Tuple[str, ...] = tuple(f"ft_pc{i:02d}" for i in range(64))
+FT_SCORE: Tuple[str, ...] = ("ft_score",)
+FT_BLOCK_PREFIX = "ftk"
 
 # ---------------------------------------------------------------- the arms
 # add  : derived families joined onto the base
@@ -130,18 +137,24 @@ FEATURE_SETS: Dict[str, Dict[str, Tuple[str, ...]]] = {
     # Pre-registered in finetuned_esm/frozen_step9.json.
     "s2pfull_117": {"add": S2PFULL_OOF, "drop": ()},
     "s2pfull_53": {"add": S2PFULL_OOF, "drop": ALL_PCS},
+    # Step 10, pre-registered in finetuned_esm/frozen_step10.json. `base: False` starts
+    # from no columns at all: the fine-tuned embedding alone.
+    "ft117": {"add": FT_PCS, "drop": ALL_PCS},
+    "ft64only": {"add": FT_PCS, "drop": (), "base": False},
+    "score118": {"add": FT_SCORE, "drop": ()},
 }
 
 USES_SUPERVISED_ESM = ("esmsup32", "esmsup32_seqwin_esmnb")
 USES_S2P = ("s2p_117", "s2p_53", "s2pfull_117", "s2pfull_53")
+USES_FT = ("ft117", "ft64only", "score118")
 
 
 def base_columns(table: pd.DataFrame) -> list[str]:
     """The published 117: model-visible columns that are not derived."""
     excluded = (set(config.NON_FEATURE_COLS) | set(ALL_DERIVED) | set(S2P_OOF)
-                | set(S2PFULL_OOF))
+                | set(S2PFULL_OOF) | set(FT_PCS) | set(FT_SCORE))
     return [c for c in table.columns
-            if c not in excluded and not c.startswith(SUPERVISED_PREFIX)]
+            if c not in excluded and not c.startswith((SUPERVISED_PREFIX, FT_BLOCK_PREFIX))]
 
 
 def resolve(name: str, table: pd.DataFrame,
@@ -167,7 +180,7 @@ def resolve(name: str, table: pd.DataFrame,
     if unknown_drop:
         raise KeyError(f"{name!r} drops columns not in the table: "
                        f"{sorted(unknown_drop)}")
-    kept = [c for c in cols if c not in drop]
+    kept = [c for c in cols if c not in drop] if spec.get("base", True) else []
 
     added = list(spec["add"]) + list(supervised)
     missing = [c for c in added if c not in table.columns]

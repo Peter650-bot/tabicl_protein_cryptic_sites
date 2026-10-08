@@ -1,0 +1,57 @@
+{
+ "cleantest_0": {
+  "train-fold-0": {
+   "rows": 75800,
+   "score_pooled_AUC": 0.8611,
+   "score_pooled_AUPRC": 0.3074
+  },
+  "test": {
+   "rows": 76753,
+   "score_pooled_AUC": 0.8735,
+   "score_pooled_AUPRC": 0.3814
+  }
+ },
+ "cleantest_1": {
+  "train-fold-1": {
+   "rows": 77725,
+   "score_pooled_AUC": 0.8792,
+   "score_pooled_AUPRC": 0.3837
+  },
+  "test": {
+   "rows": 76753,
+   "score_pooled_AUC": 0.8743,
+   "score_pooled_AUPRC": 0.3939
+  }
+ },
+ "cleantest_2": {
+  "train-fold-2": {
+   "rows": 79083,
+   "score_pooled_AUC": 0.878,
+   "score_pooled_AUPRC": 0.3786
+  },
+  "test": {
+   "rows": 76753,
+   "score_pooled_AUC": 0.877,
+   "score_pooled_AUPRC": 0.3975
+  }
+ },
+ "cleantest_3": {
+  "train-fold-3": {
+   "rows": 72343,
+   "score_pooled_AUC": 0.8706,
+   "score_pooled_AUPRC": 0.3634
+  },
+  "test": {
+   "rows": 76753,
+   "score_pooled_AUC": 0.8808,
+   "score_pooled_AUPRC": 0.3902
+  }
+ },
+ "_file": {
+  "rows": 381704,
+  "columns": 386,
+  "run_id": "s2p_full_cleantest_20261008",
+  "sha256": "4afaaa22de9321ef0ffe8392ea417fcde0a69a9542bd2f017296e9f33c58e13f",
+  "staged": "/home/peets/cryptobench_stage/tables/residues_ftemb.parquet"
+ }
+}

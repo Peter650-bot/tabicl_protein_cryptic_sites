@@ -210,3 +210,13 @@ def test_perfect_scores_give_auc_one():
     assert res["AUC"] == pytest.approx(1.0)
     assert res["TPR"] == pytest.approx(1.0)
     assert res["FPR"] == pytest.approx(0.0)
+
+
+def test_protein_subfolds_split_proteins_evenly_and_deterministically():
+    from cryptic_tabicl.sampling import protein_subfolds
+    groups = [f"p{i}" for i in range(23)] * 3          # repeated rows of each protein
+    a = protein_subfolds(groups)
+    assert set(a) == set(groups) and set(a.values()) == {0, 1, 2, 3}
+    sizes = np.bincount(list(a.values()))
+    assert sizes.max() - sizes.min() <= 1
+    assert protein_subfolds(list(reversed(groups))) == a

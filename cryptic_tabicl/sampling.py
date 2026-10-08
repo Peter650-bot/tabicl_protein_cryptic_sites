@@ -164,3 +164,16 @@ def _capped_sample(
         return capped
     pos = rng.choice(len(capped), size=n_take, replace=False)
     return capped.iloc[pos]
+
+
+def protein_subfolds(groups, n: int = 4, seed: int = config.RANDOM_SEED) -> dict:
+    """Split proteins (not rows) into `n` sub-folds: {group: 0..n-1}.
+
+    Used where a fold must be cross-validated INSIDE itself (finetuned_esm/PLAN.md
+    step 10: a fold model's held-out fold is the only data its embeddings are honest
+    on). Splitting rows would put residues of one protein on both sides. Deterministic
+    in the set of groups, whatever their order.
+    """
+    uniq = np.array(sorted(set(groups)))
+    perm = np.random.default_rng(seed).permutation(len(uniq))
+    return {str(g): int(r % n) for r, g in zip(np.argsort(perm), uniq)}

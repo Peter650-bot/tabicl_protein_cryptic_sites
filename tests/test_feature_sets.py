@@ -72,6 +72,8 @@ def test_every_arm_resolves_and_has_no_duplicates():
         t[c] = 0.0
     t["s2p_oof"] = 0.0
     t["s2pfull_oof"] = 0.0
+    for c in FS.FT_PCS + FS.FT_SCORE:
+        t[c] = 0.0
     for name in FS.FEATURE_SETS:
         want = sup if name in FS.USES_SUPERVISED_ESM else ()
         cols = FS.resolve(name, t, want)
@@ -130,7 +132,7 @@ def test_every_arm_resolves_against_the_real_table():
     for name in FS.FEATURE_SETS:
         if name in FS.USES_SUPERVISED_ESM and not sup:
             continue
-        if name in FS.USES_S2P and not set(FS.FEATURE_SETS[name]["add"]) <= set(t.columns):
+        if name in FS.USES_S2P + FS.USES_FT and not set(FS.FEATURE_SETS[name]["add"]) <= set(t.columns):
             continue
         want = sup if name in FS.USES_SUPERVISED_ESM else ()
         assert FS.resolve(name, t, want)
@@ -208,3 +210,33 @@ def test_s2p_arms_against_the_stacking_table():
     assert len(FS.resolve("s2p_117", t)) == PUBLISHED_N_FEATURES + 1
     assert len(FS.resolve("s2p_53", t)) == 54
     assert t["s2p_oof"].notna().all()
+
+
+def _ft_table():
+    t = _fake_table()
+    for c in FS.FT_PCS + FS.FT_SCORE:
+        t[c] = 0.0
+    for k in range(4):                       # per-fold-model blocks, as the table carries them
+        for i in range(64):
+            t[f"ftk{k}_pc{i:02d}"] = 0.0
+        t[f"ftk{k}_score"] = 0.0
+    return t
+
+
+def test_ft_columns_never_enter_the_control():
+    t = _ft_table()
+    base = FS.base_columns(t)
+    assert not [c for c in base if c.startswith(("ft_", "ftk"))]
+    assert FS.resolve("control", t) == FS.resolve("control", _fake_table())
+
+
+def test_ft_arms_are_what_they_say():
+    t = _ft_table()
+    base = FS.resolve("control", t)
+    struct = [c for c in base if c not in FS.ALL_PCS]
+    assert FS.resolve("ft117", t) == struct + list(FS.FT_PCS)
+    assert len(FS.resolve("ft117", t)) == len(base)
+    assert FS.resolve("ft64only", t) == list(FS.FT_PCS)
+    assert FS.resolve("score118", t) == base + ["ft_score"]
+    for name in FS.USES_FT:
+        assert not [c for c in FS.resolve(name, t) if c.startswith("ftk")], name
