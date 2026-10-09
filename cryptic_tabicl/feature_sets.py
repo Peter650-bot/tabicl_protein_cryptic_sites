@@ -111,6 +111,11 @@ S2PFULL_OOF: Tuple[str, ...] = ("s2pfull_oof",)
 FT_PCS: Tuple[str, ...] = tuple(f"ft_pc{i:02d}" for i in range(64))
 FT_SCORE: Tuple[str, ...] = ("ft_score",)
 FT_BLOCK_PREFIX = "ftk"
+# Step 11: the same hidden state, projected by PLS on the label instead of PCA, fit on
+# fold k only (`deploy/ftpls_stack.py`). Components are nested, so the d-dim arm is the
+# first d columns of one 128-component fit.
+FT_PLS: Tuple[str, ...] = tuple(f"ft_pls{i:03d}" for i in range(128))
+PLS_DIMS: Tuple[int, ...] = (2, 4, 8, 16, 32, 64, 128)
 
 # ---------------------------------------------------------------- the arms
 # add  : derived families joined onto the base
@@ -143,16 +148,21 @@ FEATURE_SETS: Dict[str, Dict[str, Tuple[str, ...]]] = {
     "ft64only": {"add": FT_PCS, "drop": (), "base": False},
     "score118": {"add": FT_SCORE, "drop": ()},
 }
+# Step 11, pre-registered in finetuned_esm/frozen_step11.json.
+for _d in PLS_DIMS:
+    FEATURE_SETS[f"pls{_d}_53"] = {"add": FT_PLS[:_d], "drop": ALL_PCS}
+    FEATURE_SETS[f"pls{_d}_only"] = {"add": FT_PLS[:_d], "drop": (), "base": False}
 
 USES_SUPERVISED_ESM = ("esmsup32", "esmsup32_seqwin_esmnb")
 USES_S2P = ("s2p_117", "s2p_53", "s2pfull_117", "s2pfull_53")
-USES_FT = ("ft117", "ft64only", "score118")
+USES_FT = ("ft117", "ft64only", "score118") + tuple(
+    f"pls{d}_{b}" for d in PLS_DIMS for b in ("53", "only"))
 
 
 def base_columns(table: pd.DataFrame) -> list[str]:
     """The published 117: model-visible columns that are not derived."""
     excluded = (set(config.NON_FEATURE_COLS) | set(ALL_DERIVED) | set(S2P_OOF)
-                | set(S2PFULL_OOF) | set(FT_PCS) | set(FT_SCORE))
+                | set(S2PFULL_OOF) | set(FT_PCS) | set(FT_SCORE) | set(FT_PLS))
     return [c for c in table.columns
             if c not in excluded and not c.startswith((SUPERVISED_PREFIX, FT_BLOCK_PREFIX))]
 

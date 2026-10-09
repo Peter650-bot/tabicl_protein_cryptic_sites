@@ -72,7 +72,7 @@ def test_every_arm_resolves_and_has_no_duplicates():
         t[c] = 0.0
     t["s2p_oof"] = 0.0
     t["s2pfull_oof"] = 0.0
-    for c in FS.FT_PCS + FS.FT_SCORE:
+    for c in FS.FT_PCS + FS.FT_SCORE + FS.FT_PLS:
         t[c] = 0.0
     for name in FS.FEATURE_SETS:
         want = sup if name in FS.USES_SUPERVISED_ESM else ()
@@ -214,7 +214,7 @@ def test_s2p_arms_against_the_stacking_table():
 
 def _ft_table():
     t = _fake_table()
-    for c in FS.FT_PCS + FS.FT_SCORE:
+    for c in FS.FT_PCS + FS.FT_SCORE + FS.FT_PLS:
         t[c] = 0.0
     for k in range(4):                       # per-fold-model blocks, as the table carries them
         for i in range(64):
@@ -240,3 +240,12 @@ def test_ft_arms_are_what_they_say():
     assert FS.resolve("score118", t) == base + ["ft_score"]
     for name in FS.USES_FT:
         assert not [c for c in FS.resolve(name, t) if c.startswith("ftk")], name
+
+
+def test_pls_arms_are_nested_and_replace_the_frozen_pcs():
+    t = _ft_table()
+    struct = [c for c in FS.resolve("control", t) if c not in FS.ALL_PCS]
+    for d in FS.PLS_DIMS:
+        assert FS.resolve(f"pls{d}_53", t) == struct + list(FS.FT_PLS[:d])
+        assert FS.resolve(f"pls{d}_only", t) == list(FS.FT_PLS[:d])
+    assert len(FS.resolve("pls64_53", t)) == len(FS.resolve("ft117", t))

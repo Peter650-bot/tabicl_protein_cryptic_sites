@@ -1537,7 +1537,42 @@ step 10.
 - **Ties step 9's stack**, +0.003 [−0.005, +0.012]. Averaging four 31 k-row fold contexts
   matches one 50 k context (control vs headline −0.003 [−0.010, +0.004]).
 
-### 13.9 What this changes
+### 13.9 PLS instead of PCA for the fine-tuned embedding (step 11, 2026-10-09)
+
+Step 11 repeats step 10, changing only the projection. It replaces PCA with PLS on the
+residue label, using the same estimator as § 12 (`PLSRegression(scale=True)`). It reuses
+the same stored hidden states, cross-fitted contexts and job body. PLS uses labels, so
+each projection is fit on train fold *k* only, the rows TabICL's context is drawn from.
+For the CV-threshold jobs, each fit also excludes the queried protein sub-fold. The
+dimension d = 64 was fixed in advance to match PCA. Pre-registered in
+`finetuned_esm/frozen_step11.json`. Full log: PLAN.md step 11.
+
+| d = 64, per-protein AUPRC | CB-full (231) | CB-P2RANK-apo (184) |
+|---|---|---|
+| 53 features + 64 **PLS** (`pls64_53`) | 0.470 | 0.503 |
+| 53 features + 64 **PCA** (`ft117`, step 10) | **0.486** | **0.520** |
+| 64 **PLS** alone (`pls64_only`) | 0.429 | 0.462 |
+| 64 **PCA** alone (`ft64only`, step 10) | 0.451 | 0.482 |
+
+- **PLS loses to PCA, significantly, for both feature sets.** With the 53 features the
+  per-protein AUPRC difference is −0.016 [−0.027, −0.005]; alone it is −0.022
+  [−0.032, −0.012]. Neither pre-registered claim holds. Pooled AUPRC differences have
+  the same sign (−0.006 and −0.012) but CIs that include zero.
+- **The number of components barely matters, and more is not better.** The 53 + d
+  model peaks at d = 4–8 (per protein 0.480 on CB-full, 0.516 on the 184). It settles
+  at 0.470 / 0.503 from d = 16 to 128. The d-only model drifts down from 0.444 at
+  d = 2. PLS's first component alone has held-out AUC 0.86–0.89, about the fine-tuned
+  head's own score. Every later component is fit to what remains of the label, and
+  TabICL does worse with these than with PCA's spread-out variance. This is the
+  mechanism § 12.5 found on the frozen ESM-2.
+- **Still a gain over the frozen PCs** (`pls64_53` − control +0.031 [+0.014, +0.049]),
+  because the first component carries the fine-tuned signal. PCA carries it better.
+
+Cost: four CPU PLS fits (~15 min of 8-core CPU, about $0.3) and 89 T4 jobs (4.6
+GPU-hours, about $2.7). Figures, outside the repo: `../Stacked_Figures/final_comparison`
+(now six models) and `../Stacked_Figures/pls_dimension_sweep`.
+
+### 13.10 What this changes
 
 
 - **The published SOTA is not ahead of zero-shot TabICL per protein.** It ties on AUPRC and

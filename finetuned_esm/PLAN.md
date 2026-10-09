@@ -648,3 +648,72 @@ already computed. Gate: the released model on their own file rounds to every num
 the Hidden paper (0.894 / 0.475 / 0.472) and is within 0.0005 of their notebook. On these 184
 it gives 0.8935 / 0.4751 / 0.4719 / F1w 0.9389 / ACC 0.9350; the residual is the 5 residues
 our table lacks. The three other rows reproduce their step-9/10 values.
+
+## Step 11 — PLS instead of PCA for the fine-tuned embedding, 2026-10-09
+
+**Question.** Step 10 gave TabICL 64 PCA components of fold model *k*'s last hidden state.
+Does a supervised projection, PLS on the residue label, serve it better? This was asked
+for two models, 53 features + 64 components and the 64 components alone, plus a sweep
+over the number of components.
+
+**Design.** Pre-registered in `frozen_step11.json` (sha256 `aacccb7b…e48f`, pinned in
+`scripts/ftpls_report.py`) before anything was fit.
+- Inputs: step 10's stored hidden states (`hidden_cleantest_k.npy` on the `cryptobench-s2p`
+  volume), reused; nothing was re-embedded.
+- Estimator: `PLSRegression(scale=True)`, as in RESULTS § 12.
+- Fits for the test jobs: fit `k{k}_test` on every train-fold-*k* table row, 128
+  components. PLS components are nested (checked: identical to a d-component fit to
+  1e-14), so the d-dim arm takes the first d.
+- Fits for the CV threshold jobs: fit `k{k}_sub{s}` on fold *k* minus sub-fold *s*,
+  64 components.
+- Leak checks: each fit's manifest lists its proteins. A job asserts that no query
+  protein is among them and that every context protein is.
+- Arms: `pls{d}_53` and `pls{d}_only` (`cryptic_tabicl/feature_sets.py`), with
+  d ∈ {2, 4, 8, 16, 32, 64, 128}. d = 64 is the headline; the other dimensions are
+  descriptive.
+- Claims: `pls64_53 − ft117` and `pls64_only − ft64only`, per-protein AUPRC, CB-full,
+  10k paired bootstrap.
+
+**Code.**
+- `scripts/ftpls_build_index.py` → `build/ftpls_rows.parquet`: the table-row → hidden-row
+  map, checked by requiring the PCs it points at to equal the table's `ftk{k}_pc`.
+- `deploy/ftpls_stack.py`: `fit_pls` (CPU) and `score_one` (step 10's body and `select`).
+- `scripts/ftpls_report.py` → `step11_thresholds.json`, `step11_result.json`.
+
+### 11a — gates PASSED
+- Mapping: on every k, PCA(64) refit on Modal from the gathered hidden-state rows matches
+  step 10's PCs (min |corr| 0.99999998; max |Δ| 2.4e-4).
+- Determinism: `ft117` k=0 through the new harness equals `fe1/ft117_k0_test.json`
+  exactly (max |Δ| 0.0).
+- Fit checks: no held protein in any fit. PLS component 0 has held-out AUC 0.86–0.89; it
+  is sign-flipped on k=1, which is harmless.
+
+### 11b — SCORED ONCE (run `fp1`)
+CV-frozen thresholds: `pls64_53` 0.3551, `pls64_only` 0.4026.
+
+| per-protein AUPRC | d=2 | 4 | 8 | 16 | 32 | 64 | 128 |
+|---|---|---|---|---|---|---|---|
+| CB-full, 53 + d | 0.473 | 0.480 | 0.480 | 0.470 | 0.472 | 0.470 | 0.470 |
+| CB-full, d only | 0.444 | 0.441 | 0.437 | 0.427 | 0.428 | 0.429 | 0.430 |
+| 184, 53 + d | 0.505 | 0.516 | 0.512 | 0.503 | 0.504 | 0.503 | 0.503 |
+| 184, d only | 0.474 | 0.473 | 0.469 | 0.458 | 0.462 | 0.462 | 0.462 |
+
+- Primary, `pls64_53 − ft117`: −0.016 [−0.027, −0.005]. **Does not pass**; PLS is
+  significantly worse.
+- Secondary, `pls64_only − ft64only`: −0.022 [−0.032, −0.012]. **Does not pass**.
+- Context: `pls64_53 − control` +0.031 [+0.014, +0.049]; `pls64_53 − score118` −0.015
+  [−0.026, −0.005].
+- The pre-registered expectation (null or negative) held. Write-up: RESULTS § 13.9.
+
+### Final comparison figure, updated 2026-10-09
+- Rows added: `pls117` = `pls64_53` and `pls64only` = `pls64_only`, each at its own
+  step-11 CV threshold. The gate also checks their recorded step-11 values.
+- On the 184 proteins, per protein vs the released model:
+  - PLS 53+64: AUC +0.021, AUPRC +0.022, both significant.
+  - PLS 64-only: AUPRC −0.018, significant.
+- New figure `scripts/pls_dims_figure.py` → `../Stacked_Figures/pls_dimension_sweep.{pdf,png}`:
+  per-protein and pooled AUPRC vs d on the 184 proteins, with step 10's PCA and the released
+  model as references.
+
+Cost of step 11: about $3 (PLS CPU about $0.3; 89 T4 jobs, 4.6 GPU-hours, about $2.7).
+

@@ -18,14 +18,17 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 RES = json.loads(Path("finetuned_esm/final_comparison.json").read_text())
-ORDER = ["released", "blend", "stack9", "ft117"]               # top to bottom
+ORDER = ["released", "blend", "stack9", "ft117", "pls117", "pls64only"]               # top to bottom
 LABEL = {
     "released": "Fine-tuned ESM-2 3B\n(Škrhák et al., released;\nmultitask + LIGYSIS)",
     "blend": "Fixed rank blend\nTabICLv2 117 + full-recipe FT score",
     "stack9": "Stack (step 9, Fig. 6's best)\nTabICLv2 117 + full-recipe FT score",
-    "ft117": "TabICLv2, 53 features +\n64 fine-tuned ESM-2 components",
+    "ft117": "TabICLv2, 53 features +\n64 fine-tuned ESM-2 PCA components",
+    "pls117": "TabICLv2, 53 features +\n64 fine-tuned ESM-2 PLS components",
+    "pls64only": "TabICLv2, 64 fine-tuned\nESM-2 PLS components only",
 }
-COLOR = {"released": "#4A3AAA", "blend": "#E9A100", "stack9": "#E24A4A", "ft117": "#13958F"}
+COLOR = {"released": "#4A3AAA", "blend": "#E9A100", "stack9": "#E24A4A", "ft117": "#13958F",
+         "pls117": "#2A78D6", "pls64only": "#008300"}
 METRICS = [("AUC", "AUC"), ("AUPRC", "AUPRC"), ("MCC", "MCC"),
            ("F1_weighted", "F1 (weighted)"), ("ACC", "Accuracy"), ("TPR", "TPR (recall)"),
            ("FPR", "FPR")]
@@ -71,9 +74,9 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     plt.rcParams.update({"font.family": "DejaVu Sans"})
 
-    fig = plt.figure(figsize=(19, 11.6))
-    gs = fig.add_gridspec(3, len(METRICS), height_ratios=[1, 1, 0.95], hspace=0.52, wspace=0.16,
-                          left=0.135, right=0.985, top=0.83, bottom=0.02)
+    fig = plt.figure(figsize=(19, 14.2))
+    gs = fig.add_gridspec(3, len(METRICS), height_ratios=[1.35, 1.35, 1.12], hspace=0.40, wspace=0.16,
+                          left=0.135, right=0.985, top=0.86, bottom=0.035)
     for row, (kind, rowtitle) in enumerate((
             ("pooled", "Pooled over all residues — the convention of Škrhák et al.'s papers"),
             ("per_protein", "Per protein, then averaged — CryptoBench's and this project's convention"))):
@@ -81,12 +84,12 @@ def main() -> None:
             ax = fig.add_subplot(gs[row, j])
             panel(ax, kind, metric, title, show_labels=j == 0)
             if j == 0:
-                ax.text(-0.02, 1.25, rowtitle, transform=ax.transAxes, fontsize=11.5,
+                ax.text(-0.02, 1.17, rowtitle, transform=ax.transAxes, fontsize=11.5,
                         fontweight="bold", color=INK, ha="left")
-    fig.text(0.135, 0.955, "Final comparison — on Škrhák et al.'s own test set "
+    fig.text(0.135, 0.965, "Final comparison — on Škrhák et al.'s own test set "
              "(CB-P2RANK-apo: 184 single-chain proteins, 55,567 residues)",
              fontsize=15, fontweight="bold", color=INK)
-    fig.text(0.135, 0.93, "Dot = point estimate; line = 95 % bootstrap CI (2,000 protein resamples). "
+    fig.text(0.135, 0.943, "Dot = point estimate; line = 95 % bootstrap CI (2,000 protein resamples). "
              "Filled = differs from the released model (dashed line) with a paired 95 % CI excluding zero; "
              "hollow = not distinguishable from it. Axes are zoomed to the data.",
              fontsize=9.5, color=MUTED)
@@ -125,13 +128,13 @@ def main() -> None:
     ops = RES["operating_points"]
     ax.text(0, 1.02, "Operating point behind MCC, F1, accuracy, TPR, FPR",
             fontsize=10.5, fontweight="bold", color=INK, transform=ax.transAxes)
-    y = 0.86
+    y = 0.9
     for m in ORDER:
         ax.plot(0.012, y + 0.005, "o", ms=7, color=COLOR[m], transform=ax.transAxes, clip_on=False)
         ax.text(0.04, y, LABEL[m].replace("\n", " "), fontsize=8.3, color=INK,
                 transform=ax.transAxes, va="center", fontweight="bold")
-        ax.text(0.04, y - 0.085, ops[m], fontsize=8, color=MUTED, transform=ax.transAxes, va="center")
-        y -= 0.215
+        ax.text(0.04, y - 0.062, ops[m], fontsize=7.4, color=MUTED, transform=ax.transAxes, va="center")
+        y -= 0.15
 
     ax = fig.add_subplot(gs[2, 5:7])
     ax.axis("off")
@@ -142,12 +145,14 @@ def main() -> None:
         "Threshold metrics also reflect where each model chose to operate; theirs was "
         "chosen on this very test set, and the step-9 stack's CV threshold overshoots "
         "on test (FPR 0.070).",
-        "Per protein, all three TabICLv2 models beat the released model on AUC and AUPRC. "
-        "Pooled, the two stacks match or beat it; the blend's within-protein ranks lose the "
-        "cross-protein calibration that pooled AUPRC rewards.",
-        "The released model saw LIGYSIS labels for 18 of these 184 proteins; every "
-        "TabICLv2 row uses fine-tuned models trained without them. No row is "
-        "zero-shot: all four use a fine-tuned ESM-2 3B.",
+        "Per protein, every TabICLv2 row with the 53 features beats the released model on "
+        "AUC and AUPRC. Pooled, the stacks match or beat it; the blend's within-protein "
+        "ranks lose the cross-protein calibration that pooled AUPRC rewards.",
+        "PLS instead of PCA (same embedding, same 64 dims) costs per-protein AUPRC: "
+        "-0.017 with the 53 features, -0.020 alone (paired 95 % CIs below zero). "
+        "The 64 PLS components alone fall below the released model.",
+        "The released model saw LIGYSIS labels for 18 of these 184 proteins; no TabICLv2 "
+        "row's fine-tuned models did. No row is zero-shot: all six use a fine-tuned ESM-2 3B.",
     ]
     yy = 0.9
     for n in notes:
@@ -155,7 +160,7 @@ def main() -> None:
         t = "\n".join(textwrap.wrap(n, 62))
         ax.text(0, yy, "• " + t.replace("\n", "\n   "), fontsize=8.2, color=INK,
                 transform=ax.transAxes, va="top")
-        yy -= 0.08 + 0.085 * t.count("\n")
+        yy -= 0.06 + 0.068 * t.count("\n")
 
     for ext in ("pdf", "png"):
         fig.savefig(out / f"final_comparison.{ext}", dpi=200 if ext == "png" else None)

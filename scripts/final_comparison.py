@@ -4,6 +4,8 @@ MODELS (test scores already computed; nothing is re-run)
     released     their fine-tuned ESM-2 3B, multitask + LIGYSIS (cbs-model.pt), step 4/5
     stack9       step 9: TabICLv2 117 + out-of-fold full-recipe score  (s2pfull_117)
     ft117        step 10: TabICLv2, 53 features + 64 PCs of the fine-tuned embedding
+    pls117       step 11: TabICLv2, 53 features + 64 PLS components of the same embedding
+    pls64only    step 11: TabICLv2, the 64 PLS components alone
     blend        step 9: fixed 0.5/0.5 within-protein rank blend of TabICLv2-117 and the
                  clean full-recipe score
 
@@ -17,6 +19,7 @@ OPERATING POINTS (threshold metrics), each model at its own, none chosen on test
     released  sigmoid > 0.7      their own threshold (swept on their test set)
     stack9    >= 0.5843          step 9 CV-frozen (step9_thresholds.json)
     ft117     >= 0.3407          step 10 CV-frozen (step10_thresholds.json)
+    pls117, pls64only            step 11 CV-frozen (step11_thresholds.json)
     blend     top 7.74 % of each protein -- TabICL's CV-frozen rank rule; approximate for a
               blend, as frozen.json pre-registered
 
@@ -43,7 +46,8 @@ from cryptic_tabicl import config as C, evaluate, operating_point as op  # noqa:
 from f1_by_subset import single_chain_pdbs  # noqa: E402
 
 N_BOOT, SEED = 2_000, 0
-MODELS = ("released", "stack9", "ft117", "blend")
+MODELS = ("released", "stack9", "ft117", "pls117", "pls64only", "blend")
+PLS_MODELS = {"pls117": "pls64_53", "pls64only": "pls64_only"}   # step 11, d = 64
 METRICS = ("AUC", "AUPRC", "MCC", "F1_weighted", "ACC", "TPR", "FPR")
 PUBLISHED_PAPER = {"AUC": 0.894, "AUPRC": 0.475, "MCC": 0.472}           # Hidden, ACM BCB 2025
 PUBLISHED_NOTEBOOK = {"AUC": 0.8935, "AUPRC": 0.4752, "MCC": 0.4724,      # seq2pocket notebook
@@ -52,6 +56,9 @@ RECORDED = {  # this subset, from step9_result.json / step10_result.json
     "stack9": {"pp_AUPRC": 0.517, "pooled_AUC": 0.907, "pooled_AUPRC": 0.476},
     "ft117": {"pp_AUPRC": 0.520, "pooled_AUC": 0.906, "pooled_AUPRC": 0.488},
     "blend": {"pp_AUPRC": 0.510, "pooled_AUC": 0.890, "pooled_AUPRC": 0.413},
+    # step11_result.json, CB-P2RANK-apo
+    "pls117": {"pp_AUPRC": 0.503, "pooled_AUC": 0.898, "pooled_AUPRC": 0.483},
+    "pls64only": {"pp_AUPRC": 0.462, "pooled_AUC": 0.880, "pooled_AUPRC": 0.449},
 }
 
 
@@ -77,6 +84,13 @@ def load() -> pd.DataFrame:
         attach(f"ft117_k{k}", r, r["score"])
         per_k.append(df[f"ft117_k{k}"].to_numpy())
     df["ft117"] = np.mean(per_k, axis=0)
+    for name, arm in PLS_MODELS.items():
+        per_k = []
+        for k in range(4):
+            r = json.loads((C.BUILD_DIR / "ftpls_stack" / "fp1" / f"{arm}_k{k}_test.json").read_text())
+            attach(f"{name}_k{k}", r, r["score"])
+            per_k.append(df[f"{name}_k{k}"].to_numpy())
+        df[name] = np.mean(per_k, axis=0)
     t = pd.read_parquet(C.BUILD_DIR / "residues_s2pfull.parquet",
                         columns=["apo_id", "chain", "seq_id", "split", "s2pfull_oof"])
     t = t[t["split"] == "test"].reset_index(drop=True)
@@ -93,15 +107,19 @@ def calls(df: pd.DataFrame) -> tuple[dict, dict]:
     g = df["apo_id"].to_numpy()
     t9 = json.loads(Path("finetuned_esm/step9_thresholds.json").read_text())["s2pfull_117"]["frozen_threshold"]
     t10 = json.loads(Path("finetuned_esm/step10_thresholds.json").read_text())["ft117"]["frozen_threshold"]
+    t11 = json.loads(Path("finetuned_esm/step11_thresholds.json").read_text())
+    t11 = {name: t11[arm]["frozen_threshold"] for name, arm in PLS_MODELS.items()}
     rank_thr = json.loads((C.PROJECT_ROOT / "operating_point/frozen.json").read_text()
                           )["rules"]["rank"]["frozen_threshold"]
     pred = {"released": df["released"].to_numpy() > 0.7,
             "stack9": df["stack9"].to_numpy() >= t9,
             "ft117": df["ft117"].to_numpy() >= t10,
+            **{m: df[m].to_numpy() >= t for m, t in t11.items()},
             "blend": op.transform("rank", df["blend"].to_numpy(), g) >= rank_thr}
     desc = {"released": "score > 0.7 (theirs; chosen on their test set)",
             "stack9": f"score >= {t9:.4f} (step 9, CV-frozen)",
             "ft117": f"score >= {t10:.4f} (step 10, CV-frozen)",
+            **{m: f"score >= {t:.4f} (step 11, CV-frozen)" for m, t in t11.items()},
             "blend": f"top {100 * op.top_q_from_threshold(rank_thr):.2f} % of each protein "
                      "(TabICL's CV-frozen rank rule; approximate for a blend)"}
     return {k: v.astype(int) for k, v in pred.items()}, desc

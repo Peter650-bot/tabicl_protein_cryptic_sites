@@ -1,0 +1,24 @@
+{
+ "step": 11,
+ "written": "2026-10-09, before any PLS projection was fit and before any TabICL job of step 11 ran",
+ "question": "Does a supervised projection (PLS) of the fine-tuned ESM-2's last hidden state serve TabICL better than step 10's unsupervised one (PCA)?",
+ "fold_models": "cleantest_0..3 (run s2p_full_cleantest_20261008), unchanged from step 10; their stored fp16 hidden states (hidden_cleantest_k.npy) are reused, nothing is re-embedded",
+ "projection": "sklearn PLSRegression(scale=True) of the 2560-d hidden state on the residue label, the same estimator and settings as RESULTS.md section 12 (esm_supervised_modal.py). Fit rows: every table row of train fold k (the rows TabICL's context is drawn from) -- for a CV threshold job, train fold k minus the queried protein sub-fold. Never a test row. 128 components are fit once per k; the d-component arm uses the first d, which equal a d-component fit exactly (PLS components are nested).",
+ "mapping_gate": "the hidden-state rows gathered for the table rows must reproduce step 10's PCA columns: PCA(64, random_state=0) refit on the fold-k chains, |corr| >= 0.999 per component against ftk{k}_pc",
+ "harness": "deploy/ftpls_stack.py; the step-10 job body and select() unchanged (tabicl 2.1.1, seed 0, budget 50k, context = train fold k, query = test, test score = mean over k=0..3)",
+ "determinism_gate": "ft117 k=0 test through the new harness equals build/ftemb_stack/fe1/ft117_k0_test.json exactly",
+ "arms": {
+  "pls{d}_53": "53 structural/ensemble/conservation + the first d PLS components (in place of the frozen PCs)",
+  "pls{d}_only": "the first d PLS components alone"
+ },
+ "dims": [2, 4, 8, 16, 32, 64, 128],
+ "headline_dim": "64, fixed in advance to match step 10's PCA; not chosen on test. Only d=64 enters the final comparison figure.",
+ "thresholds": "d=64 only, step 10's protocol: per k, out-of-fold scores of the 4 protein sub-folds of fold k, threshold at mean per-protein FPR 0.05, frozen = median over k",
+ "criterion": "paired 95 % bootstrap CI (10,000 protein resamples, seed 0) of per-protein AUPRC on CB-full (231 proteins) excludes zero",
+ "claims": {
+  "primary": "pls64_53 - ft117",
+  "secondary": "pls64_only - ft64only"
+ },
+ "context_not_claimed": ["every other dimension (the sweep is descriptive)", "everything on CB-P2RANK-apo (184) and pooled", "pls64_53 - score118"],
+ "expectation": "null or negative: PLS of the frozen ESM-2 cost 0.0185 AUPRC (RESULTS.md section 12.5), and the fine-tuned head's score is already the embedding's best linear direction, which PLS's first component will largely recover"
+}
