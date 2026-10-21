@@ -31,6 +31,15 @@ Reproduce with `python scripts/compare_variants.py`.
 > per-protein AUPRC **0.482** / AUC **0.876**. That model is not zero-shot and is reported
 > beside the headline, not in place of it.
 
+> **Best model, PAM, 2026-10-08 (§ 13.8).** PAM (`ft117`) keeps the 53 structural features
+> and replaces the 64 frozen ESM-2 PCs with 64 PCs of a clean, cross-fitted fine-tuned
+> ESM-2's last hidden state. It is still classified by zero-shot TabICLv2. On CB-full it
+> reaches per-protein AUPRC **0.486** / AUC **0.872**, with FPR 0.046, MCC 0.398 and weighted
+> F1 0.926 at its CV-frozen threshold. That is +0.048 [+0.033, +0.062] AUPRC over the same
+> protocol with frozen PCs. Over 12 context draws PAM's AUPRC is 0.4856 ± 0.0012 (§ 13.11).
+> Swapping TabICLv2 for NVIDIA Kumo Tabular on PAM's exact inputs is worse: −0.009
+> [−0.016, −0.002] (§ 14).
+
 ---
 
 ## 1. Headline
@@ -76,6 +85,8 @@ all.
 | **TabICLv2 +ESM (this work)** | **CB-full** | 0.862 | **0.441** | **0.559** | 0.071 | 0.374 | 0.912 |
 | TabICLv2, no pLM (this work) | CB-full | 0.848 | 0.388 | 0.515 | 0.073 | 0.336 | 0.906 |
 | pLM-NN (benchmark) | CB-full | 0.86 | 0.36 | 0.48 | 0.05 | 0.39 | 0.92 |
+| PAM: TabICLv2 + fine-tuned ESM PCs (§ 13.8) | CB-full | 0.872 | 0.486 | 0.515 | 0.046 | 0.398 | 0.926 |
+| PAM (§ 13.8) | CB-P2RANK-apo | 0.874 | 0.520 | 0.533 | 0.043 | 0.426 | 0.930 |
 | **TabICLv2 +ESM (this work)** | **CB-P2RANK-apo** | 0.861 | **0.469** | **0.569** | 0.068 | 0.392 | 0.914 |
 | TabICLv2, no pLM (this work) | CB-P2RANK-apo | 0.845 | 0.411 | 0.512 | 0.068 | 0.350 | 0.910 |
 | pLM-NN | CB-P2RANK-apo | 0.88 | 0.42 | 0.51 | 0.04 | 0.43 | 0.93 |
@@ -86,7 +97,9 @@ all.
 
 The F1 column is the published one — a **weighted average over both classes**, computed
 here exactly as the paper computes it (per structure, weighted, then averaged) so the
-rows are directly comparable. See § *Metric conventions* below for why the positive-class
+rows are directly comparable. The two PAM rows are not zero-shot in features (their ESM-2
+was fine-tuned on CryptoBench's training folds), and their TPR/FPR/MCC/F1 are point
+estimates without CIs (§ 13.8). See § *Metric conventions* below for why the positive-class
 F1 must not be placed in this column. Published values are from
 `external/CryptoBench/README.md`; ours regenerate with `python scripts/f1_by_subset.py`.
 
@@ -1577,9 +1590,75 @@ GPU-hours, about $2.7). Figures, outside the repo: `../Stacked_Figures/final_com
 
 - **The published SOTA is not ahead of zero-shot TabICL per protein.** It ties on AUPRC and
   trails on AUC; its lead is a pooled-AUPRC lead, partly on proteins it had labels for.
-- **The two are complementary**, and stacking them is the strongest model this project has:
-  per-protein AUPRC 0.482 / AUC 0.876 on CB-full, 0.517 on the 184. It is no longer
-  zero-shot — its feature comes from a fine-tuned 3B model — so it is reported beside the
-  zero-shot headline, not in place of it.
+- **The two are complementary.** Stacking them (§ 13.6) gives per-protein AUPRC 0.482 / AUC
+  0.876 on CB-full and 0.517 on the 184. Feeding TabICL the fine-tuned embedding instead of
+  the score (PAM, § 13.8) gives 0.486 / 0.872 and 0.520, a tie with the stack and the best
+  point estimate this project has. Neither is zero-shot in its features, since both draw on
+  a fine-tuned 3B model, so they are reported beside the zero-shot headline, not in place of it.
 - **The practical recipe is cheap:** a fixed 50/50 rank blend of TabICL and the fine-tuned
   score matches the stack per protein with nothing fitted.
+- **PAM is stable and the classifier is not the bottleneck.** Its context draw moves AUPRC
+  by sd 0.0012 (§ 13.11), and a newer tabular foundation model on the same inputs does
+  slightly worse (§ 14).
+
+### 13.11 Context-draw variance of PAM (step 12, 2026-10-14)
+
+§ 4.6 repeated for PAM. Only `build_context`'s seed varies, which changes which non-cryptic
+residues fill each fold-*k* context and their order. The fine-tuned models, embeddings, PCA,
+sub-fold split and TabICL's `random_state` are fixed. Each seed reruns the whole protocol: 16
+sub-fold jobs give its own threshold (median of four), and 4 test jobs are averaged. Seed 0 is
+run `fe1`. Seeds 1–11 are run `fe1seeds` (`deploy/ftemb_stack.py --stage seeds`, 220 T4 jobs,
+about $4.5). Report: `scripts/ftemb_seed_report.py` → `finetuned_esm/step12_seed_variance.json`.
+Full log: PLAN.md step 12.
+
+| CB-full (231), own threshold per seed | mean | sd | min – max | seed 0 |
+|---|---|---|---|---|
+| per-protein AUC | 0.8727 | 0.0004 | 0.8720 – 0.8734 | 0.8722 |
+| per-protein AUPRC | 0.4856 | 0.0012 | 0.4836 – 0.4871 | 0.4859 |
+| pooled AUC | 0.9030 | 0.0002 | 0.9028 – 0.9034 | 0.9030 |
+| pooled AUPRC | 0.4210 | 0.0018 | 0.4185 – 0.4242 | 0.4235 |
+| TPR | 0.5163 | 0.0035 | 0.5105 – 0.5222 | 0.5148 |
+| FPR | 0.0467 | 0.0005 | 0.0461 – 0.0480 | 0.0463 |
+| MCC | 0.3977 | 0.0021 | 0.3927 – 0.4004 | 0.3976 |
+| threshold | 0.3414 | 0.0021 | 0.3376 – 0.3451 | 0.3407 |
+
+- **The draw is a small source of variance**, as it was for TabICL-117 (per-protein AUPRC sd
+  0.0012 vs 0.0015). The 120-per-protein cap binds, so every draw takes 120 negatives per
+  protein and only *which* 120 changes. Two seeds share 32 % of their negatives, and the 12
+  draws together cover 95.7 % of the training negatives.
+- **Seed 0 is ordinary per protein** (rank 6–7 of 12), but second-best of 12 on pooled AUPRC,
+  about 1.4 sd above the mean. Quote the 12-seed mean (0.421) where pooled AUPRC matters.
+- **No step-10 conclusion changes.** Every difference called a tie is within the draw noise,
+  and PAM − control (+0.048) is about 40× the draw sd.
+
+## 14. NVIDIA Kumo Tabular on PAM's inputs (extension, 2026-10-18)
+
+Is TabICLv2 the limit? NVIDIA's Kumo Tabular (`large`, ~214M parameters,
+`structured-data-models` 0.2.1, September 2026) is a newer zero-shot in-context tabular model
+of the same kind. It replaced TabICLv2 with everything else fixed: PAM's 117 columns, its four
+cross-fitted fold contexts at seed 0, the threshold rule and the test set. The comparison is
+therefore paired. It used 16 estimators and ran on an A100-80GB. Pre-registered in
+`extension/frozen.json`, run `ku1`, scored once. Code, gates and log: [`extension/`](extension/).
+
+| CB-full (231), per protein | Kumo Tabular | PAM (TabICLv2) | Kumo − PAM, paired 95 % CI |
+|---|---|---|---|
+| AUPRC | 0.477 | **0.486** | **−0.009 [−0.016, −0.002]** |
+| AUC | 0.866 | **0.872** | −0.006 [−0.010, −0.003] |
+| pooled AUPRC | 0.416 | 0.424 | −0.007 [−0.021, +0.007] |
+| pooled AUC | 0.900 | 0.903 | −0.003 [−0.007, +0.001] |
+| TPR / FPR (each model's own CV-frozen threshold) | 0.475 / 0.041 | 0.515 / 0.046 | |
+| MCC | 0.389 | 0.398 | |
+
+- **Kumo is significantly worse, by a small margin.** The same holds on CB-P2RANK-apo
+  (0.512 vs 0.520, −0.008 [−0.016, −0.000]). Kumo trails in three of the four single-fold
+  contexts and ties in one.
+- **The loss is the model, not the plumbing.** The same adapter was first run with sdm's
+  TabICLv2 port on PAM's exact checkpoint. On fold context 0 it reproduced PAM's run to
+  +0.0012 per-protein AUPRC (Spearman 0.987).
+- **No complementary signal.** A fixed 50/50 within-protein rank blend of Kumo and PAM ties
+  PAM (−0.001 [−0.004, +0.003]).
+- **Not covered:** one context draw (seed 0), one configuration (`large`, 16 estimators),
+  and no Kumo fine-tuning. 117 columns exceeds Kumo's 100-column pretraining maximum. The
+  context protocol was tuned around TabICL.
+
+Cost: about $0.70 of A100 time (20 scoring jobs, 976 s).

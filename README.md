@@ -26,6 +26,46 @@ This file is the summary; RESULTS.md is the record.
 | Model | TabICLv2, zero-shot (no fitting, no fine-tuning) |
 | Splits | CryptoBench's own sequence-identity folds |
 
+## Best model: PAM (2026-10-08)
+
+PAM (`ft117`) keeps the 53 structural features and replaces the 64 frozen ESM-2 PCs with
+**64 PCs of a fine-tuned ESM-2 3B's last hidden state**. The classifier is still zero-shot
+TabICLv2. The fine-tuned models are Škrhák et al.'s full recipe, retrained here once per
+training fold with every LIGYSIS protein homologous to that fold or to the test set removed.
+A fine-tuned model's embeddings of its own training proteins encode their labels, so the
+design is **cross-fitted**. Fold model *k* embeds fold *k*, the fold it never saw, which
+becomes TabICL's context, and it also embeds the test set. The 64 PCs are fit on fold *k*
+only, and the four test predictions are averaged.
+
+| CB-full (231), per protein | AUC | AUPRC | TPR | FPR | MCC | F1 (weighted) |
+|---|---|---|---|---|---|---|
+| **PAM: 53 structural + 64 fine-tuned ESM-2 PCs** | **0.872** | **0.486** | 0.515 | **0.046** | **0.398** | **0.926** |
+| TabICLv2 zero-shot, 53 + 64 frozen ESM-2 PCs | 0.862 | 0.441 | **0.559** | 0.071 | 0.374 | 0.912 |
+| pLM-NN (published) | 0.86 | 0.36 | 0.48 | 0.05 | 0.39 | 0.92 |
+
+- **Fine-tuned PCs vs frozen PCs, same protocol: +0.048 [+0.033, +0.062]** per-protein
+  AUPRC (pre-registered primary claim). On the 184 single-chain structures PAM reaches 0.520.
+- **Stable across context draws.** Over 12 seeds, per-protein AUPRC is 0.4856 ± 0.0012
+  (RESULTS.md § 13.11).
+- **The threshold transfers.** Test FPR is 0.046 against the 0.05 CV target, so PAM no longer
+  runs at the looser operating point the frozen-ESM model does. TPR/FPR/MCC/F1 are point
+  estimates; only AUC and AUPRC carry CIs.
+- **Ties the alternatives built on the same fine-tune.** These are the fine-tuned score as
+  one extra column (+0.001), and the out-of-fold stack (+0.003). PLS in place of PCA is
+  significantly worse (−0.016).
+- **Not zero-shot in its features.** The ESM-2 was fine-tuned on CryptoBench's training folds.
+  The zero-shot frozen-ESM results below remain the reference for "no training of any kind".
+
+**Swapping the classifier does not help (2026-10-18).** NVIDIA's Kumo Tabular (large, 16
+estimators) was run in place of TabICLv2 on PAM's exact 117 columns, contexts, threshold rule
+and test set. It is slightly but significantly worse: −0.009 [−0.016, −0.002] per-protein
+AUPRC. A 50/50 rank blend of the two ties PAM. Before Kumo was scored, the same adapter was
+checked with sdm's TabICLv2 port, which reproduced PAM to +0.0012. Write-up and code:
+[`extension/`](extension/README.md), RESULTS.md § 14.
+
+Full record: RESULTS.md § 13.8–13.11; log and gates: [`finetuned_esm/PLAN.md`](finetuned_esm/PLAN.md)
+steps 10–12.
+
 ## Results
 
 Test set (231 proteins, 76,753 residues), metrics computed per protein then averaged,
@@ -57,7 +97,8 @@ scored per protein by this pipeline:
 |---|---|---|
 | their fine-tuned ESM-2 (released) | 0.839 | 0.446 |
 | **TabICLv2, zero-shot (this work)** | **0.862** | 0.441 |
-| **stack: TabICLv2 + out-of-fold fine-tuned score** | **0.876** | **0.482** |
+| stack: TabICLv2 + out-of-fold fine-tuned score | **0.876** | 0.482 |
+| **PAM: TabICLv2 + fine-tuned embedding PCs** (above) | 0.872 | **0.486** |
 
 - **Per protein, the published state of the art ties this project on AUPRC and trails it
   on AUC** (−0.023 [−0.039, −0.006]). Its only significant lead is pooled AUPRC on the 184
@@ -405,7 +446,9 @@ deploy/
 ├── finetuned_esm_modal.py    the released fine-tuned ESM-2, scored on every chain
 ├── s2p_finetune_modal.py     their plain and full (multitask + LIGYSIS) recipes, per fold
 ├── s2p_models.py, finetuning_utils.py   their code, vendored verbatim (MIT)
-└── s2p_stack.py              TabICL with the out-of-fold score as a feature
+├── s2p_stack.py              TabICL with the out-of-fold score as a feature
+├── ftemb_stack.py            PAM: TabICL on the cross-fitted fine-tuned PCs (+ 12-seed study)
+└── ftpls_stack.py            the same with a PLS projection in place of PCA
 
 scripts/
 ├── fetch_cryptobench.py   annotations
@@ -416,8 +459,10 @@ scripts/
 ├── bootstrap_test.py      test-set CIs
 ├── f1_by_subset.py        CB-full / CB-P2RANK-apo, with the published F1 convention
 ├── cryptosite_testset.py  the 14-pair CryptoSite external test set
-└── s2p_*.py               fine-tuned ESM-2 work: input rebuild, reproduction, per-protein
-                           evaluation, blend, LIGYSIS overlap audit, stack report
+├── s2p_*.py               fine-tuned ESM-2 work: input rebuild, reproduction, per-protein
+│                          evaluation, blend, LIGYSIS overlap audit, stack report
+├── ftemb_*.py, ftpls_*.py fine-tuned-embedding tables and reports (PAM, PLS, seed variance)
+└── final_comparison*.py, pls_dims_figure.py   all fine-tuned-ESM-era models on one test set
 
 figures/
 ├── make_benchmark_figure.py   the published-benchmark bars  → benchmark_comparison.{png,pdf}
@@ -442,6 +487,9 @@ feature_sweep/             the feature screen: ten arms on one CV fold, the free
 
 finetuned_esm/             the fine-tuned ESM-2 comparison: PLAN.md (log, gates, every
                            number), pre-registrations (frozen*.json), per-step results
+
+extension/                 NVIDIA Kumo Tabular in place of TabICLv2 on PAM's inputs:
+                           adapter, Modal harness, pre-registration, report, tests
 
 tests/                     leakage guards, label logic, sampler invariants,
                            fpocket parsing, conservation join, ESM index bookkeeping
@@ -494,7 +542,7 @@ python figures/make_model_ladder_figure.py
 python figures/make_slide_figures.py
 python figures/make_deck.py
 
-pytest tests/ -q      # 124 tests
+pytest tests/ extension/tests -q      # 206 tests
 ```
 
 `figures/benchmark_comparison.html` is the one artifact with no build step: it is
@@ -702,9 +750,10 @@ Modal client dropped its connection. Both are fixed and described in § 9.5.
   and the one thing harmonic ANM modes cannot produce
 
 Since 2026-10-06 the one lever that moved the ranking metrics is an external one: a
-fine-tuned ESM-2 score as a feature (+0.041 per-protein AUPRC; RESULTS.md § 13). The
-already-open-pocket stratum is the natural place to check whether it helps where TabICL is
-weakest — not yet measured.
+fine-tuned ESM-2, either as a score column (+0.041 per-protein AUPRC) or as embedding PCs
+(PAM, +0.048 over frozen PCs; RESULTS.md § 13). A newer tabular foundation model on the same
+inputs did not move it (§ 14). The already-open-pocket stratum is the natural place to check
+whether the fine-tune helps where TabICL is weakest. That has not been measured yet.
 
 The cheap levers are now exhausted, and that now includes features. Weights
 (fine-tuning), inference knobs (the sweep), the decision rule and ten feature sets have
