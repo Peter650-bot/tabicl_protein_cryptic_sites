@@ -717,3 +717,51 @@ CV-frozen thresholds: `pls64_53` 0.3551, `pls64_only` 0.4026.
 
 Cost of step 11: about $3 (PLS CPU about $0.3; 89 T4 jobs, 4.6 GPU-hours, about $2.7).
 
+
+## Step 12 — context-draw variance of ft117 (12 seeds), 2026-10-14
+
+RESULTS § 4.6 redone for the best model. Only `build_context`'s seed varies (which
+non-cryptic residues fill each fold-k context, and their order). The fine-tuned models,
+embeddings, PCA, sub-fold split and TabICL's `random_state` are fixed. Each seed reruns the
+whole protocol: 16 sub-fold jobs give its own threshold (median of four), and 4 test jobs are
+averaged. Seed 0 is run `fe1`; seeds 1–11 are run `fe1seeds` (`deploy/ftemb_stack.py --stage
+seeds`, 220 T4 jobs, 7.65 GPU-h of scoring, about $4.5). Report: `scripts/ftemb_seed_report.py`
+→ `step12_seed_variance.json`.
+
+- Gate: a seed-0 job rerun on the redeployed harness matches `fe1` on 18,688 of 18,694 scores,
+  max |Δp| 2.2e-4, every metric equal to 6 decimals (GPU float noise, not bit-exact as before).
+  The report reproduces `step10_result.json` exactly from the `fe1` files.
+- Contexts per seed stay at 30,309–31,128 rows: the 120-per-protein cap binds, so every draw
+  takes 120 negatives from each protein and only *which* 120 changes.
+- Overlap (contexts rebuilt locally, sizes checked against every job's `n_context`): a seed's
+  four fold contexts hold 106,923 negatives; two seeds share 51,751 on average (Jaccard
+  31.9 %, sd 0.1 %), the most-similar pair (seeds 6, 7) 52,115 (32.2 %). TabICL-117's 50 k
+  draws shared ~8 %. The 12 draws together cover 276,089 of 288,621 training negatives
+  (95.7 %); 9,548 appear in all 12.
+
+| CB-full (231), own threshold per seed | mean | sd | min – max | seed 0 |
+|---|---|---|---|---|
+| per-protein AUC | 0.8727 | 0.0004 | 0.8720 – 0.8734 | 0.8722 |
+| per-protein AUPRC | 0.4856 | 0.0012 | 0.4836 – 0.4871 | 0.4859 |
+| pooled AUC | 0.9030 | 0.0002 | 0.9028 – 0.9034 | 0.9030 |
+| pooled AUPRC | 0.4210 | 0.0018 | 0.4185 – 0.4242 | 0.4235 |
+| TPR | 0.5163 | 0.0035 | 0.5105 – 0.5222 | 0.5148 |
+| FPR | 0.0467 | 0.0005 | 0.0461 – 0.0480 | 0.0463 |
+| MCC | 0.3977 | 0.0021 | 0.3927 – 0.4004 | 0.3976 |
+| threshold | 0.3414 | 0.0021 | 0.3376 – 0.3451 | 0.3407 |
+
+| CB-P2RANK-apo (184), own threshold | mean | sd | min – max | seed 0 |
+|---|---|---|---|---|
+| per-protein AUPRC | 0.5196 | 0.0015 | 0.5161 – 0.5222 | 0.5199 |
+| pooled AUC | 0.9059 | 0.0002 | 0.9056 – 0.9062 | 0.9058 |
+| pooled AUPRC | 0.4847 | 0.0023 | 0.4824 – 0.4897 | 0.4877 |
+| MCC | 0.4266 | 0.0025 | 0.4207 – 0.4297 | 0.4256 |
+
+- The draw is a small source of variance, as for TabICL-117 (per-protein AUPRC sd 0.0012 vs
+  0.0015). Seed 0 is ordinary on per-protein metrics (rank 6–7 of 12) but second-best of 12
+  on pooled AUPRC, about 1.4 sd above the mean (CB-full 0.4235 vs 0.4210; 184: 0.4877 vs
+  0.4847). Quote the 12-seed mean for pooled AUPRC where it matters.
+- Keeping seed 0's threshold (0.341) instead of re-choosing it changes nothing material
+  (CB-full TPR 0.5169 ± 0.0023, MCC 0.3979 ± 0.0020).
+- Unchanged conclusions: every step-10 difference called a tie is still within the draw noise,
+  and ft117 − control (+0.048) is ~40× the draw sd.

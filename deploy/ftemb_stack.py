@@ -17,6 +17,10 @@ STAGES
     gate   control, standard context, train-fold-0       must equal k64_train-fold-0.json
     cv     4 arms x k=0..3 x 4 protein sub-folds of fold k (thresholds only)
     test   4 arms x k=0..3, query = test                 (the result, once)
+    seeds  ft117 only, context-draw seeds 1..11 x k=0..3 x (4 sub-folds + test): the
+           RESULTS.md 4.6 study for the best model. Only `build_context`'s seed varies;
+           the sub-fold split stays at SEED, so each seed reruns the whole protocol
+           (thresholds included) on new negatives. Seed 0 is run `fe1`.
 
 USAGE
     modal deploy deploy/ftemb_stack.py
@@ -45,6 +49,10 @@ KS = [0, 1, 2, 3]
 STAGES = {"gate": [{"name": "control", "k": None, "query": "train-fold-0"}],
           "cv": [{"name": n, "k": k, "query": f"sub{s}"} for n in ARMS for k in KS for s in range(4)],
           "test": [{"name": n, "k": k, "query": "test"} for n in ARMS for k in KS]}
+N_SEEDS = 12
+STAGES["seeds"] = [{"name": "ft117", "k": k, "query": q, "seed": s}
+                   for s in range(1, N_SEEDS) for k in KS
+                   for q in [f"sub{i}" for i in range(4)] + ["test"]]
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -129,7 +137,7 @@ def score_one(job: dict) -> dict:
     t0 = time.time()
     clf = model.CrypticSitePredictor().fit(ctx)
     scores = clf.predict_by_protein(target)
-    out = {**{k: job[k] for k in ("name", "k", "query")}, "n_features": n_feat, "features": cols,
+    out = {**{k: job[k] for k in ("name", "k", "query", "seed")}, "n_features": n_feat, "features": cols,
            "n_context": len(ctx), "n_context_proteins": int(ctx[C.GROUP_COL].nunique()),
            "seconds": time.time() - t0, "config": clf.config(),
            "apo_id": target[C.GROUP_COL].tolist(), "chain": target["chain"].tolist(),
@@ -164,13 +172,14 @@ def main(stage: str = "", run_id: str = "", collect: bool = False):
         out = Path("build/ftemb_stack") / run_id
         out.mkdir(parents=True, exist_ok=True)
         for r in fetch_results.remote(run_id):
-            name = f"{r['name']}_k{r['k']}_{r['query']}.json"
+            seed = r.get("seed", SEED)              # fe1 results predate the field
+            name = f"{r['name']}_k{r['k']}_{r['query']}" + (f"_s{seed}" if seed != SEED else "") + ".json"
             (out / name).write_text(json.dumps(r))
             print(f"wrote {out / name} ({len(r['score']):,} scores, {r['seconds']:.0f}s)")
         return
     if stage not in STAGES:
         raise SystemExit(f"--stage must be one of {sorted(STAGES)}")
-    jobs = [{**j, "budget": BUDGET, "seed": SEED, "run_id": run_id, "table": TABLE_NAME}
+    jobs = [{"budget": BUDGET, "seed": SEED, **j, "run_id": run_id, "table": TABLE_NAME}
             for j in STAGES[stage]]
     tags = [job_tag(j) for j in jobs]
     assert len(set(tags)) == len(tags), "job tags collide"
