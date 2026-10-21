@@ -1,0 +1,16 @@
+{
+ "sdm": "0.2.1",
+ "torch": "2.7.1+cu126",
+ "cuda": "12.6",
+ "gpu": "NVIDIA A100 80GB PCIe",
+ "output_columns": [
+  "0",
+  "1"
+ ],
+ "n_params": 213668250,
+ "auc": 0.9969114219114219,
+ "n_query": 269,
+ "seconds": 5.217657566070557,
+ "kumo_large_classifier_sha256": "cc21484316949641cc3d65a7bb6c36cdea854cc569435755ff23b850018ec613",
+ "tabicl_classifier_sha256": "bdc7dbd5e4ff21f8f0456fcf90c6b7cdf72dbea960f2d05b19bec19f9b3d4ed0"
+}

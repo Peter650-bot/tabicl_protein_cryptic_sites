@@ -1,0 +1,53 @@
+{
+ "written": "2026-10-18, after gates (extension/gates.json) and before any cv or test job",
+ "question": "With the classifier as the only change, does NVIDIA Kumo Tabular (large) beat TabICLv2 (PAM = ft117, run fe1) on PAM's features, contexts, threshold rule and test set?",
+ "table": {
+  "name": "residues_ftemb.parquet",
+  "sha256_prefix": "4afaaa22"
+ },
+ "harness": "extension/kumo_stack.py (select copied verbatim from deploy/ftemb_stack.py; sampling.build_context seed 0, budget 50,000) + extension/kumo_model.py",
+ "model": {
+  "library": "structured-data-models==0.2.1",
+  "class": "sdm.models.KumoTabular",
+  "size": "large",
+  "hf_revision": "v1.0.1",
+  "checkpoint_sha256": "cc21484316949641cc3d65a7bb6c36cdea854cc569435755ff23b850018ec613",
+  "num_estimators": 16,
+  "estimator_batch_size": 1,
+  "fp16_autocast": true,
+  "generator_seed": 0,
+  "categorical": [
+   "resname",
+   "ss"
+  ],
+  "torch": "2.7.1+cu126",
+  "gpu": "A100-80GB"
+ },
+ "arms": {
+  "kumo117": "Kumo Tabular on the 117 ft117 columns, 4 fold contexts k=0..3, test score = mean of the 4",
+  "PAM": "fe1 ft117 (TabICLv2), the same 4 contexts, from build/ftemb_stack/fe1"
+ },
+ "jobs": "cv: k=0..3 x protein sub-folds sub0..3 (16); test: k=0..3 (4); run id ku1",
+ "threshold_rule": "per k: evaluate.choose_threshold (mean per-protein FPR <= 0.05) on the concatenated out-of-fold scores of the 4 sub-folds; frozen = median of the 4; written to extension/kumo_thresholds.json before test is read. PAM keeps its own step-10 threshold 0.3407.",
+ "criterion": "paired 95% percentile bootstrap, 10,000 protein resamples, rng seed 0 (scripts/s2p_stack_report.paired), CB-full (231) per-protein AUPRC; two-sided: better if lower bound > 0, worse if upper bound < 0, else tie",
+ "claims": {
+  "primary": "kumo117 - PAM"
+ },
+ "context_not_claimed": [
+  "per-protein AUC",
+  "pooled AUC and AUPRC",
+  "CB-P2RANK-apo (184)",
+  "TPR/FPR/MCC/F1/F1_weighted at each model's own CV-frozen threshold",
+  "test FPR transfer",
+  "per-k single-context per-protein AUPRC",
+  "rank_blend: fixed 50/50 within-protein rank average of kumo117 and PAM (exploratory)"
+ ],
+ "not_covered": "one context-draw seed (0), paired with fe1; PAM's 12-seed SD 0.0012 is quoted as context; Kumo's own seed variance is not measured",
+ "expectation": "a tie within about +/-0.01 per-protein AUPRC (extension/PLAN.md, written before any job ran)",
+ "disclosure": "the step-3 pilot exposed one CV block before this file was written: k=0/sub0 per-protein AUPRC kumo 0.3935 vs fe1 0.4006 (extension/gates.json). No test score has been produced. The expectation above was written before the pilot and is unchanged.",
+ "gates": {
+  "harness": true,
+  "determinism": true,
+  "cost_pilot": true
+ }
+}

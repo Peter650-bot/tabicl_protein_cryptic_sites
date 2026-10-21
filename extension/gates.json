@@ -1,0 +1,40 @@
+{
+ "run_id": "ku1",
+ "harness": {
+  "sdm_tabiclv2_pp_auprc": 0.45200481142523635,
+  "fe1_tabicl_pp_auprc": 0.45075536949921935,
+  "diff": 0.001249441926017003,
+  "spearman": 0.9871004099379292,
+  "n_context": [
+   30309,
+   30309
+  ],
+  "features_identical": true,
+  "passed": true
+ },
+ "determinism": {
+  "max_abs_diff": 0.0,
+  "tolerance": 0.001,
+  "n_context": [
+   22698,
+   22698
+  ],
+  "n_features": 117,
+  "n_context_columns": 117,
+  "features_identical_to_fe1": true,
+  "kumo_pp_auprc_k0_sub0": 0.39347261381036297,
+  "fe1_pp_auprc_k0_sub0": 0.40064365987987655,
+  "passed": true
+ },
+ "cost_pilot": {
+  "seconds_fit": 27.649370074272156,
+  "seconds_predict": 13.590128183364868,
+  "peak_gpu_gb": 5.198615550994873,
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "projected_seconds_20_jobs": 1107.3729219883785,
+  "projected_usd_20_jobs": 0.7690089736030405,
+  "ceiling_usd": 30.0,
+  "passed": true
+ },
+ "passed": true
+}
