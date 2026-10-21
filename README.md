@@ -46,7 +46,8 @@ How to read the tables:
   one vector.
 - **Thresholds:** PAM uses its CV-frozen threshold. Their model uses their own threshold of
   0.7, which they chose on their test set.
-- **Δ rows:** † marks a paired 95 % bootstrap CI that excludes zero (2,000 protein resamples).
+- **Significance:** "significant" below means the paired 95 % bootstrap CI of the difference
+  excludes zero (2,000 protein resamples; all CIs in `finetuned_esm/readme_comparison.json`).
 - **Leakage in their model:** their LIGYSIS pre-training set contains 28 CryptoBench test
   proteins, so their model saw binding-site labels for part of the test set. PAM's fine-tuned
   models exclude them.
@@ -61,11 +62,9 @@ How to read the tables:
 |---|---|---|---|---|---|---|---|---|
 | **PAM** | per protein | **0.872** | **0.486** | **0.924** | **0.515** | **0.046** | **0.398** | **0.926** |
 | Škrhák et al. fine-tuned ESM-2 | per protein | 0.839 | 0.446 | 0.918 | 0.496 | 0.059 | 0.381 | 0.924 |
-| *PAM − theirs* | per protein | +0.033† | +0.040† | +0.006† | +0.019 | -0.012† | +0.017 | +0.001 |
 | PocketMiner (published, on CB-PM ⊂ CB-full) | per protein | 0.76 | 0.19 | 0.82 | 0.51 | 0.16 | 0.22 | 0.78 |
 | **PAM** | pooled | **0.903** | **0.424** | **0.929** | **0.577** | **0.051** | **0.437** | **0.936** |
 | Škrhák et al. fine-tuned ESM-2 | pooled | 0.882 | 0.397 | 0.927 | 0.556 | 0.052 | 0.418 | 0.934 |
-| *PAM − theirs* | pooled | +0.021† | +0.027 | +0.002 | +0.022 | -0.001 | +0.019 | +0.002 |
 
 ### CB-P2RANK-apo: the 184 single-chain structures
 
@@ -75,11 +74,9 @@ How to read the tables:
 |---|---|---|---|---|---|---|---|---|
 | **PAM** | per protein | **0.874** | **0.520** | **0.929** | **0.533** | **0.043** | **0.426** | 0.930 |
 | Škrhák et al. fine-tuned ESM-2 | per protein | 0.848 | 0.480 | 0.927 | 0.509 | 0.050 | 0.408 | 0.930 |
-| *PAM − theirs* | per protein | +0.026† | +0.039† | +0.003 | +0.024 | -0.007† | +0.018 | +0.000 |
 | P2Rank (published) | per protein | 0.81 | 0.21 | 0.85 | 0.62 | 0.14 | 0.27 | 0.81 |
 | **PAM** | pooled | **0.906** | **0.488** | 0.935 | **0.598** | 0.045 | **0.483** | 0.939 |
 | Škrhák et al. fine-tuned ESM-2 | pooled | 0.893 | 0.475 | 0.935 | 0.576 | **0.043** | 0.472 | 0.939 |
-| *PAM − theirs* | pooled | +0.012† | +0.013 | +0.000 | +0.023 | +0.001 | +0.011 | +0.001 |
 
 ### CB-full minus CB-P2RANK-apo: the 47 multi-chain structures
 
@@ -89,10 +86,8 @@ How to read the tables:
 |---|---|---|---|---|---|---|---|---|
 | **PAM** | per protein | **0.866** | **0.353** | **0.902** | 0.444 | **0.061** | **0.288** | **0.906** |
 | Škrhák et al. fine-tuned ESM-2 | per protein | 0.805 | 0.310 | 0.883 | 0.444 | 0.095 | 0.274 | 0.901 |
-| *PAM − theirs* | per protein | +0.061† | +0.043† | +0.019† | +0.000 | -0.034† | +0.013 | +0.005 |
 | **PAM** | pooled | **0.895** | **0.249** | **0.915** | **0.503** | **0.067** | **0.314** | **0.928** |
 | Škrhák et al. fine-tuned ESM-2 | pooled | 0.844 | 0.197 | 0.906 | 0.485 | 0.075 | 0.285 | 0.922 |
-| *PAM − theirs* | pooled | +0.051† | +0.052† | +0.008 | +0.018 | -0.008 | +0.029 | +0.006† |
 
 - **PAM is ahead per protein on all three sets.** The AUPRC gain is significant on every set:
   +0.040 on CB-full, +0.039 on the 184, and +0.043 on the 47. The AUC gain is significant too,
