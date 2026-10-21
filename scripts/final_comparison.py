@@ -62,7 +62,7 @@ RECORDED = {  # this subset, from step9_result.json / step10_result.json
 }
 
 
-def load() -> pd.DataFrame:
+def load(single_chain_only: bool = True) -> pd.DataFrame:
     blob = json.loads((C.BUILD_DIR / "modal_result_esm64.json").read_text())
     df = pd.DataFrame({k: blob["scores"][k] for k in ("apo_id", "chain", "seq_id", "y")})
     df["tabicl"] = blob["scores"]["score"]
@@ -98,6 +98,8 @@ def load() -> pd.DataFrame:
     g = df.groupby("apo_id")
     df["blend"] = 0.5 * g["tabicl"].rank(method="average", pct=True) \
         + 0.5 * g["full_alone"].rank(method="average", pct=True)
+    if not single_chain_only:                       # all 231 (scripts/readme_comparison.py)
+        return df
     single = single_chain_pdbs()
     return df[df["apo_id"].str[:4].str.lower().isin(single)].reset_index(drop=True)
 
