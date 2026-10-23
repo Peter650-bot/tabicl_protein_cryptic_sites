@@ -2,11 +2,13 @@
 
 Per-residue cryptic binding site prediction on CryptoBench, zero-shot TabICLv2.
 
-All numbers below are **measured**, on CryptoBench's own test split (231 apo structures,
-76,753 residues, 5.28% positive), with metrics computed **per protein then averaged** —
-the same procedure as CryptoBench's `Protein.py`, so they are comparable to the
-published benchmark. The decision threshold is always selected on training folds and
-frozen before the test set is touched.
+All numbers below are **measured**, on CryptoBench's own test split (222 apo structures,
+stored as 231 test records, 76,753 residues, 5.28% positive), with metrics computed **per
+unit then averaged**. Models are compared with each other per test record (231). Where a
+number sits beside CryptoBench's published table (§ 2), it is computed on CryptoBench's
+own unit instead — one chain, as its evaluation code defines it (262 on the full test
+set). The decision threshold is always selected on training folds and frozen before the
+test set is touched.
 
 Reproduce with `python scripts/compare_variants.py`.
 
@@ -38,7 +40,15 @@ Reproduce with `python scripts/compare_variants.py`.
 > F1 0.926 at its CV-frozen threshold. That is +0.048 [+0.033, +0.062] AUPRC over the same
 > protocol with frozen PCs. Over 12 context draws PAM's AUPRC is 0.4856 ± 0.0012 (§ 13.11).
 > Swapping TabICLv2 for NVIDIA Kumo Tabular on PAM's exact inputs is worse: −0.009
-> [−0.016, −0.002] (§ 14).
+> [−0.016, −0.002] (§ 14). These are per test record (231). On CryptoBench's own unit
+> (262 chains, § 2) PAM is AUPRC **0.469** / AUC **0.864** against pLM-NN's 0.36 / 0.86:
+> the AUPRC lead clears its CI, everything else ties pLM-NN except ACC, which trails.
+
+> **Evaluation unit corrected, 2026-10-23 (§ 2).** CryptoBench's published per-protein
+> numbers average over chains (verified in its evaluation code), not over our 231 records.
+> § 2 and § 2.1 are now computed on that unit, CB-PM is reconstructed from CryptoBench's own
+> logs, and 7ndl is dropped as their code drops it. The only verdict that changes: the
+> zero-shot ESM variant's MCC on CB-P2RANK-apo goes from a significant loss to a tie.
 
 ---
 
@@ -63,7 +73,7 @@ prediction time — and, since § 9, no quantity *derived* from one either.
 **The two rows no longer answer the same question they used to.** The 53-feature row
 was previously described here as the stronger claim, on the grounds that it beat
 pLM-NN without a protein language model. That is no longer true: at 53 features AUPRC
-0.388 [0.356, 0.420] **contains** pLM-NN's 0.36, so it is a tie. Only the 117-feature
+0.382 [0.350, 0.417] on CryptoBench's own unit **contains** pLM-NN's 0.36, so it is a tie. Only the 117-feature
 row clears the benchmark, and only on AUPRC and TPR (§ 2.1). The 53-feature row is
 still worth keeping as the no-pLM reference point; it is not a win.
 
@@ -72,125 +82,179 @@ still worth keeping as the no-pLM reference point; it is not a win.
 ## 2. Against the published benchmark
 
 pLM-NN below is CryptoBench's own baseline. The stronger fine-tuned ESM-2 published after
-this table was written (pooled AUPRC 0.475 on CB-P2RANK-apo) is compared in § 13, where both
-conventions — per protein and pooled — are reported for every model.
+it (pooled AUPRC 0.475 on CB-P2RANK-apo) is compared in § 13, where both conventions — per
+protein and pooled — are reported for every model.
 
-CryptoBench reports on several subsets. **Only CB-full is comparable to us** — we
-evaluate every test protein, whereas the P2Rank and PocketMiner figures are on subsets
-those tools could run on, and the P2Rank "holo" row is not the apo prediction task at
-all.
+> **Re-measured on CryptoBench's evaluation unit, 2026-10-23.** Every number in § 2 and
+> § 2.1 used to be computed over our 231 test *records*. CryptoBench's published numbers
+> average over something else, which its code fixes (verified below): **one unit per
+> chain**. All rows below are now on that unit. The verdicts barely move; the one that does
+> is listed in § 2.1.
 
-| Method | Dataset | AUC | AUPRC | TPR | FPR | MCC | F1 (weighted) |
-|---|---|---|---|---|---|---|---|
-| **TabICLv2 +ESM (this work)** | **CB-full** | 0.862 | **0.441** | **0.559** | 0.071 | 0.374 | 0.912 |
-| TabICLv2, no pLM (this work) | CB-full | 0.848 | 0.388 | 0.515 | 0.073 | 0.336 | 0.906 |
-| pLM-NN (benchmark) | CB-full | 0.86 | 0.36 | 0.48 | 0.05 | 0.39 | 0.92 |
-| PAM: TabICLv2 + fine-tuned ESM PCs (§ 13.8) | CB-full | 0.872 | 0.486 | 0.515 | 0.046 | 0.398 | 0.926 |
-| PAM (§ 13.8) | CB-P2RANK-apo | 0.874 | 0.520 | 0.533 | 0.043 | 0.426 | 0.930 |
-| **TabICLv2 +ESM (this work)** | **CB-P2RANK-apo** | 0.861 | **0.469** | **0.569** | 0.068 | 0.392 | 0.914 |
-| TabICLv2, no pLM (this work) | CB-P2RANK-apo | 0.845 | 0.411 | 0.512 | 0.068 | 0.350 | 0.910 |
-| pLM-NN | CB-P2RANK-apo | 0.88 | 0.42 | 0.51 | 0.04 | 0.43 | 0.93 |
-| P2Rank | CB-P2RANK-apo | 0.81 | 0.21 | 0.62 | 0.14 | 0.27 | 0.81 |
-| pLM-NN | CB-PM | 0.88 | 0.43 | 0.52 | 0.04 | 0.44 | 0.93 |
-| PocketMiner | CB-PM | 0.76 | 0.19 | 0.51 | 0.16 | 0.22 | 0.78 |
-| P2Rank | CB-P2RANK-**holo** | 0.89 | 0.34 | 0.84 | 0.15 | 0.38 | 0.81 |
+### What "one protein" means in CryptoBench's table
+
+A per-protein metric is computed inside each unit and then averaged, every unit weighted
+equally, so the unit decides both which residues are ranked together and how much each
+structure counts. pLM-NN's evaluation code (`skrhakv/apolo`, branch `cryptobench-v2`,
+commit `ccc7b60`; the CryptoBench README points there) defines it:
+
+1. `create-annotations.py` writes **one row per apo structure**: the union of every cryptic
+   pocket's residues, under the chain string with the most chains (`3pfp;A-B`).
+2. `helper.py` splits that string on `-` and makes **one entry per chain**, skipping any
+   chain whose annotation is empty.
+3. `stats.py` averages over those chains and **always drops 7ndl** (a UniProt-mapping bug).
+
+That gives **262 chains** on CB-full. Our table instead has **231 records**: 7 multi-chain
+structures (1g1m, 2nt1, 2zcg, 3lnz, 3pfp, 7nbc, 8gxj) appear as several overlapping
+records with different pocket sets — 5,418 residue rows twice, 157 of them with
+conflicting labels. `scripts/published_comparison.py` rebuilds CryptoBench's unit from our
+scores: each structure's most-chains record (it covers all the others), labels OR-ed over
+its records, one unit per chain, 7ndl dropped. Every chain has at least one cryptic residue.
+
+The same code fixes the subsets:
+
+| subset | CryptoBench's definition (from code) | units |
+|---|---|---|
+| CB-full | all chains, 7ndl dropped | 262 chains of 221 structures |
+| CB-PM | single-chain structures minus the 21 PocketMiner prediction errors logged in `H-prediction-evaluation/roc-curve.ipynb`, minus 7ndl | 162 (pLM-NN); PocketMiner itself was scored with 7ndl, 163 |
+| CB-P2RANK-apo | the single-chain structures, minus 7ndl | 183 (pLM-NN); P2Rank was scored on all 184 |
+
+CB-PM was previously listed here as not reconstructible; the skipped-structure log in
+CryptoBench's own repository reconstructs it, and its count (162) matches the paper's.
+
+### The table
+
+All rows per protein on the units above. pLM-NN, PocketMiner and P2Rank are the published
+values (CryptoBench Table 5); ours regenerate with `python scripts/published_comparison.py`.
+
+| Method | Dataset | AUC | AUPRC | ACC | TPR | FPR | MCC | F1 (weighted) |
+|---|---|---|---|---|---|---|---|---|
+| **PAM: TabICLv2 + fine-tuned ESM PCs (§ 13.8)** | **CB-full** | 0.864 | **0.469** | 0.921 | 0.501 | 0.048 | 0.379 | 0.924 |
+| **TabICLv2 +ESM (this work)** | **CB-full** | 0.857 | **0.430** | 0.899 | **0.552** | 0.074 | 0.358 | 0.910 |
+| TabICLv2, no pLM (this work) | CB-full | 0.844 | 0.382 | 0.890 | 0.517 | 0.081 | 0.325 | 0.902 |
+| pLM-NN (benchmark) | CB-full | 0.86 | 0.36 | 0.93 | 0.48 | 0.05 | 0.39 | 0.92 |
+| PAM (§ 13.8) | CB-PM | 0.877 | 0.528 | 0.929 | 0.534 | 0.043 | 0.430 | 0.930 |
+| TabICLv2 +ESM (this work) | CB-PM | 0.864 | 0.473 | 0.906 | 0.569 | 0.067 | 0.397 | 0.914 |
+| TabICLv2, no pLM (this work) | CB-PM | 0.847 | 0.411 | 0.901 | 0.502 | 0.067 | 0.348 | 0.909 |
+| pLM-NN | CB-PM | 0.88 | 0.43 | 0.93 | 0.52 | 0.04 | 0.44 | 0.93 |
+| PocketMiner | CB-PM | 0.76 | 0.19 | 0.82 | 0.51 | 0.16 | 0.22 | 0.78 |
+| PAM (§ 13.8) | CB-P2RANK-apo | 0.876 | 0.523 | 0.930 | 0.536 | 0.042 | 0.428 | 0.930 |
+| **TabICLv2 +ESM (this work)** | **CB-P2RANK-apo** | 0.862 | **0.471** | 0.906 | **0.572** | 0.068 | 0.394 | 0.915 |
+| TabICLv2, no pLM (this work) | CB-P2RANK-apo | 0.846 | 0.413 | 0.902 | 0.514 | 0.068 | 0.351 | 0.910 |
+| pLM-NN | CB-P2RANK-apo | 0.88 | 0.42 | 0.93 | 0.51 | 0.04 | 0.43 | 0.93 |
+| P2Rank | CB-P2RANK-apo | 0.81 | 0.21 | 0.85 | 0.62 | 0.14 | 0.27 | 0.81 |
+| P2Rank | CB-P2RANK-**holo** | 0.89 | 0.34 | 0.85 | 0.84 | 0.15 | 0.38 | 0.81 |
 
 The F1 column is the published one — a **weighted average over both classes**, computed
-here exactly as the paper computes it (per structure, weighted, then averaged) so the
-rows are directly comparable. The two PAM rows are not zero-shot in features (their ESM-2
-was fine-tuned on CryptoBench's training folds), and their TPR/FPR/MCC/F1 are point
-estimates without CIs (§ 13.8). See § *Metric conventions* below for why the positive-class
-F1 must not be placed in this column. Published values are from
-`external/CryptoBench/README.md`; ours regenerate with `python scripts/f1_by_subset.py`.
+here exactly as the paper computes it, so the rows are directly comparable. The PAM rows
+are not zero-shot in features (their ESM-2 was fine-tuned on CryptoBench's training folds).
+See § *Metric conventions* below for why the positive-class F1 must not be placed in this
+column. CryptoBench's Figure 4 also gives **pooled** AUC/AUPRC on CB-PM — pLM-NN 0.88 /
+0.44, PocketMiner 0.76 / 0.19 — against PAM's 0.904 / 0.490 on PocketMiner's 163.
 
-On CB-full the ESM variant exceeds pLM-NN on AUPRC (+0.081) and TPR (+0.079), is level
-on AUC (0.862 vs 0.86) and MCC (0.374 vs 0.39), and is **worse** on FPR (0.071 vs 0.05)
-and weighted F1 (0.912 vs 0.92). Only two of those six are wins, and § 2.1 confirms it:
-the AUPRC and TPR gaps clear resampling, AUC and MCC contain pLM-NN's value, and FPR and
-F1 run against us with the benchmark outside our interval.
+On CB-full the zero-shot ESM variant exceeds pLM-NN on AUPRC (+0.070) and TPR (+0.072), is
+level on AUC (0.857 vs 0.86) and MCC (0.358 vs 0.39), and is **worse** on FPR (0.074 vs
+0.05), ACC and weighted F1 (0.910 vs 0.92). § 2.1 confirms it: the AUPRC and TPR gaps clear
+resampling, AUC and MCC contain pLM-NN's value, and FPR, ACC and F1 run against us with the
+benchmark outside our interval. PAM keeps the AUPRC lead (+0.109) and brings FPR, F1 and
+TPR level with pLM-NN, but its MCC (0.379) and AUC (0.864) are ties, not wins, and its ACC
+is lower.
 
-The FPR overshoot is threshold transfer, and it is now cleanly attributable. The
-threshold is swept on the CV folds to a **mean per-protein FPR of 0.05** — the statistic
-CryptoBench publishes — and every fold lands at exactly 0.0500. It arrives at 0.071 on
-the held-out test split purely through distribution shift across sequence-identity
-folds. (Before § 9.3 the sweep targeted the *pooled* FPR, a quantity this document never
-reports, so part of the old gap was a definitional mismatch. That component is gone; what
-remains is transfer.)
+The FPR overshoot of the zero-shot variants is threshold transfer. The threshold is swept
+on the CV folds to a **mean per-protein FPR of 0.05** — the statistic CryptoBench
+publishes — and every fold lands at exactly 0.0500. It arrives at 0.07 on the held-out
+test split purely through distribution shift across sequence-identity folds. (Before § 9.3
+the sweep targeted the *pooled* FPR, a quantity this document never reports, so part of the
+old gap was a definitional mismatch. That component is gone; what remains is transfer.)
 
-CB-P2RANK-apo (the 184 single-chain test structures) is reconstructible from the shipped
-dataset, so we report it too. With ESM we lead on AUPRC (+0.049) and TPR (+0.059), trail
-on AUC (0.861 vs 0.88), MCC (0.392 vs 0.43), FPR (0.068 vs 0.04) and F1 (0.914 vs 0.93).
-Without a language model nothing clears. This is the subset where our evaluation unit and
-pLM-NN's are identical by construction, so it is the cleaner of the two rows — and on it
-our advantage is narrower than on CB-full, not wider.
+On CB-PM and CB-P2RANK-apo the units are single-chain structures for both sides, so those
+rows were nearly right before; dropping 7ndl moves them by about 0.003. With ESM we lead on
+AUPRC and TPR, trail on FPR, ACC and F1, and tie on AUC and MCC. Without a language model
+nothing clears.
 
 **F1 separates almost nothing here, and that is the finding.** Every pLM-based row —
-ours and pLM-NN's, on both subsets — sits at 0.92–0.93; the column's only real
+ours and pLM-NN's, on every subset — sits at 0.90–0.93; the column's only real
 discrimination is against the structure-only tools (P2Rank 0.81, PocketMiner 0.78). At
 5.28 % prevalence a weighted F1 is governed by the 95 % of residues that are trivially
 negative, so it largely measures whether a method avoided flooding the negative class.
-Two consequences for reporting: our 0.912 on CB-full is now **behind** pLM-NN's 0.92
-rather than level with it, and on CB-P2RANK-apo pLM-NN is ahead too, 0.93 vs 0.914.
 Quote AUPRC, not F1 — but do not quote F1 as a tie either.
-
-**CB-PM is not reconstructible** from the shipped files — it is defined by which 60
-structures PocketMiner failed on, which is a property of that tool's run, not of the
-dataset. Getting that row requires asking the authors for the structure list.
 
 ### 2.1 Confidence intervals, and which claims survive them
 
 Every number above is a point estimate on one test set. Because each metric is a **mean
-over per-protein values**, a CI comes free: resample the test proteins with replacement
-and re-average the stored per-protein table — no re-scoring, no GPU. 10,000 resamples,
-percentile interval, `python scripts/bootstrap_test.py`.
+over per-unit values**, a CI comes free: resample the test set with replacement and
+re-average the stored per-unit table — no re-scoring, no GPU. Draws resample **whole
+structures** (all chains of a structure together, since they are not independent); 10,000
+draws, seed 0, percentile interval, `python scripts/published_comparison.py`.
+
+**PAM (§ 13.8)**
+
+| metric | CB-full (262 chains) | 95 % CI | pLM-NN | CB-P2RANK-apo (183) | 95 % CI | pLM-NN |
+|---|---|---|---|---|---|---|
+| AUC | 0.864 | [0.840, 0.887] | 0.86 ✗ | 0.876 | [0.850, 0.902] | 0.88 ✗ |
+| AUPRC | 0.469 | [0.429, 0.510] | 0.36 ✔ | 0.523 | [0.478, 0.568] | 0.42 ✔ |
+| ACC | 0.921 | [0.914, 0.927] | 0.93 ✗† | 0.930 | [0.923, 0.936] | 0.93 ✗ |
+| TPR | 0.501 | [0.449, 0.552] | 0.48 ✗ | 0.536 | [0.483, 0.589] | 0.51 ✗ |
+| FPR | 0.048 | [0.043, 0.053] | 0.05 ✗ | 0.042 | [0.038, 0.047] | 0.04 ✗ |
+| MCC | 0.379 | [0.340, 0.419] | 0.39 ✗ | 0.428 | [0.385, 0.470] | 0.43 ✗ |
+| F1 (weighted) | 0.924 | [0.915, 0.931] | 0.92 ✗ | 0.930 | [0.922, 0.938] | 0.93 ✗ |
 
 **TabICLv2 + ESM (117 feat)**
 
-| metric | CB-full (n=231) | 95 % CI | pLM-NN | CB-P2RANK-apo (n=184) | 95 % CI | pLM-NN |
+| metric | CB-full (262 chains) | 95 % CI | pLM-NN | CB-P2RANK-apo (183) | 95 % CI | pLM-NN |
 |---|---|---|---|---|---|---|
-| AUC | 0.862 | [0.840, 0.882] | 0.86 ✗ | 0.861 | [0.835, 0.885] | 0.88 ✗ |
-| AUPRC | 0.441 | [0.405, 0.478] | 0.36 ✔ | 0.469 | [0.427, 0.510] | 0.42 ✔ |
-| TPR | 0.559 | [0.514, 0.604] | 0.48 ✔ | 0.569 | [0.517, 0.619] | 0.51 ✔ |
-| FPR | 0.071 | [0.065, 0.076] | 0.05 ✗† | 0.068 | [0.063, 0.074] | 0.04 ✗† |
-| MCC | 0.374 | [0.342, 0.406] | 0.39 ✗ | 0.392 | [0.354, 0.427] | 0.43 ✗† |
-| F1 (weighted) | 0.912 | [0.905, 0.918] | 0.92 ✗† | 0.914 | [0.906, 0.921] | 0.93 ✗† |
+| AUC | 0.857 | [0.835, 0.879] | 0.86 ✗ | 0.862 | [0.837, 0.887] | 0.88 ✗ |
+| AUPRC | 0.430 | [0.394, 0.468] | 0.36 ✔ | 0.471 | [0.430, 0.512] | 0.42 ✔ |
+| ACC | 0.899 | [0.892, 0.906] | 0.93 ✗† | 0.906 | [0.899, 0.912] | 0.93 ✗† |
+| TPR | 0.552 | [0.501, 0.602] | 0.48 ✔ | 0.572 | [0.522, 0.622] | 0.51 ✔ |
+| FPR | 0.074 | [0.068, 0.080] | 0.05 ✗† | 0.068 | [0.062, 0.074] | 0.04 ✗† |
+| MCC | 0.358 | [0.323, 0.393] | 0.39 ✗ | 0.394 | [0.357, 0.431] | 0.43 ✗ |
+| F1 (weighted) | 0.910 | [0.902, 0.917] | 0.92 ✗† | 0.915 | [0.906, 0.922] | 0.93 ✗† |
 
 **TabICLv2, no pLM (53 feat)**
 
-| metric | CB-full (n=231) | 95 % CI | pLM-NN | CB-P2RANK-apo (n=184) | 95 % CI | pLM-NN |
+| metric | CB-full (262 chains) | 95 % CI | pLM-NN | CB-P2RANK-apo (183) | 95 % CI | pLM-NN |
 |---|---|---|---|---|---|---|
-| AUC | 0.848 | [0.828, 0.867] | 0.86 ✗ | 0.845 | [0.820, 0.868] | 0.88 ✗† |
-| AUPRC | 0.388 | [0.356, 0.420] | 0.36 ✗ | 0.411 | [0.374, 0.448] | 0.42 ✗ |
-| TPR | 0.515 | [0.474, 0.556] | 0.48 ✗ | 0.512 | [0.463, 0.559] | 0.51 ✗ |
-| FPR | 0.073 | [0.068, 0.079] | 0.05 ✗† | 0.068 | [0.062, 0.074] | 0.04 ✗† |
-| MCC | 0.336 | [0.307, 0.365] | 0.39 ✗† | 0.350 | [0.315, 0.383] | 0.43 ✗† |
-| F1 (weighted) | 0.906 | [0.899, 0.913] | 0.92 ✗† | 0.910 | [0.902, 0.917] | 0.93 ✗† |
+| AUC | 0.844 | [0.824, 0.863] | 0.86 ✗ | 0.846 | [0.822, 0.870] | 0.88 ✗† |
+| AUPRC | 0.382 | [0.350, 0.417] | 0.36 ✗ | 0.413 | [0.375, 0.450] | 0.42 ✗ |
+| ACC | 0.890 | [0.881, 0.898] | 0.93 ✗† | 0.902 | [0.895, 0.908] | 0.93 ✗† |
+| TPR | 0.517 | [0.473, 0.562] | 0.48 ✗ | 0.514 | [0.466, 0.562] | 0.51 ✗ |
+| FPR | 0.081 | [0.073, 0.091] | 0.05 ✗† | 0.068 | [0.062, 0.073] | 0.04 ✗† |
+| MCC | 0.325 | [0.297, 0.354] | 0.39 ✗† | 0.351 | [0.318, 0.386] | 0.43 ✗† |
+| F1 (weighted) | 0.902 | [0.893, 0.910] | 0.92 ✗† | 0.910 | [0.902, 0.917] | 0.93 ✗† |
 
 ✔ = pLM-NN's published value falls **outside** our interval, on the losing side — the
 gap survives test-set resampling.  ✗ = it falls **inside**, so the difference is not
 resolved by this test set.  † = outside the interval but on the side that favours
-pLM-NN (lower FPR; higher F1 on CB-P2RANK-apo), i.e. a gap against us.
+pLM-NN (lower FPR; higher ACC, F1, MCC or AUC), i.e. a gap against us.
 
-**What this changes.**
+On CB-PM (162) the picture is the same: PAM's AUPRC 0.528 [0.480, 0.575] clears pLM-NN's
+0.43 and every other PAM interval contains pLM-NN's value; the zero-shot ESM variant's
+AUPRC 0.473 [0.429, 0.516] contains 0.43 there, so on that subset it is a tie.
 
-- **AUPRC and TPR are the whole result, and only with ESM.** pLM-NN sits below our
-  interval on both metrics and both subsets — but *only* for the 117-feature variant.
-  These are the two claims to lead with, and there are no others.
-- **The AUC lead is gone entirely.** It survived resampling on CB-full in the previous
-  (leaky) measurement. It does not now: 0.862 [0.840, 0.882] contains pLM-NN's 0.86.
-  Report AUC as a tie.
-- **The "no language model needed" claim is withdrawn.** This was the document's
-  strongest-sounding claim. At 53 features AUPRC 0.388 [0.356, 0.420] contains 0.36 and
-  TPR 0.515 [0.474, 0.556] contains 0.48 — ties, not wins — and MCC 0.336 now sits
-  *below* pLM-NN's 0.39 with 0.39 outside our interval. Without a protein language
-  model this work does not beat the benchmark on anything.
-- **MCC has moved from "unresolved" to "a loss" in three of four cells.** Only CB-full
-  at 117 features still contains pLM-NN's value.
-- **Four gaps now run against us significantly**: FPR on both subsets, weighted F1 on
-  both, MCC on three cells of four, and AUC on CB-P2RANK-apo at 53 features.
+**What this says.**
 
-The honest one-line summary: *with ESM-2 we rank residues better than pLM-NN (AUPRC,
-TPR) while operating at a looser threshold (FPR, F1, MCC); without ESM-2 we match it.*
+- **AUPRC is the one claim that holds for every model with a language model.** pLM-NN
+  sits below the interval for PAM and for the zero-shot ESM variant on both subsets.
+  TPR clears too for the zero-shot variant, which runs at a looser threshold; PAM's TPR
+  is a tie at a matched FPR.
+- **There is no AUC lead.** Every interval contains pLM-NN's value, PAM's included.
+- **The "no language model needed" claim stays withdrawn.** At 53 features AUPRC 0.382
+  [0.350, 0.417] contains 0.36 and TPR contains 0.48 — ties, not wins — and MCC sits below
+  pLM-NN's with 0.39 and 0.43 outside the interval. Without a protein language model this
+  work does not beat the benchmark on anything.
+- **Changed by the unit correction:** the zero-shot ESM variant's MCC on CB-P2RANK-apo,
+  0.394 [0.357, 0.431], now contains pLM-NN's 0.43 (it was a significant loss, 0.392
+  [0.354, 0.427], on the old records — the 7ndl drop and the structure-level resampling
+  widen it just enough). MCC is a significant loss only for the no-pLM variant.
+- **Gaps that run against us significantly**: FPR, ACC and weighted F1 for both zero-shot
+  variants on both subsets; MCC and AUC (CB-P2RANK-apo) for the no-pLM variant; for PAM
+  only ACC on CB-full (0.921 vs 0.93).
+
+The honest one-line summary: *with ESM-2 we rank residues better than pLM-NN (AUPRC);
+the zero-shot variants buy their higher TPR with a looser threshold (FPR, ACC, F1), and
+PAM matches pLM-NN on every threshold metric except ACC on CB-full; without ESM-2 we do
+not beat it.*
 
 **What the interval does NOT cover.** Two caveats, both real:
 
@@ -203,23 +267,25 @@ TPR) while operating at a looser threshold (FPR, F1, MCC); without ESM-2 we matc
    It is a correction to these numbers rather than a competing source of doubt.
 
 
-### Metric conventions, verified against the paper and `Protein.py`
+### Metric conventions, verified against the paper and the evaluation code
 
 | convention | CryptoBench | this work | comparable? |
 |---|---|---|---|
-| aggregation | per structure, then mean | per structure, then mean | yes |
+| aggregation | per chain, then mean (pockets of a structure merged; chains without cryptic residues and 7ndl dropped) | § 2: the same; elsewhere: per test record (231), then mean | § 2 only |
 | AUPRC estimator | `metrics.auc(recall, precision)` | same | yes |
-| F1 | **weighted average over both classes** | positive-class | **no — see below** |
+| F1 | **weighted average over both classes** | both reported | weighted only — see below |
 | decision threshold | 0.95, fixed on a validation set | selected on train folds for FPR 0.05 | per-method by design |
 | ACC | reported | reported | meaningless at 5% prevalence |
 
+Outside § 2 this document compares models with each other on the same 231 records, which is
+a like-for-like comparison; only a number placed beside CryptoBench's published table needs
+CryptoBench's unit.
+
 The paper states F1 was "computed using a weighted average", which at ~5% prevalence is
 dominated by the negative class — that is why their F1 (0.92) tracks their ACC (0.93)
-rather than their TPR (0.48). `evaluate.py` now emits **both**: our `F1_weighted` is
-**0.918** for the 54-feature variant and **0.921** with ESM, i.e. indistinguishable from
-their 0.92, and our positive-class `F1` is **0.397** / **0.415**, which is the number
-that actually carries information. Only `F1_weighted` may be placed next to the
-published column.
+rather than their TPR (0.48). `evaluate.py` emits **both**: the weighted F1 is the one
+placed next to the published column, and the positive-class `F1` (~0.38–0.42 for our
+variants) is the number that actually carries information.
 
 The threshold is not a benchmark constant: pLM-NN used 0.95, PocketMiner 0.7 (its
 authors' recommendation), and P2Rank emits binary calls with no threshold at all. Each
@@ -1055,7 +1121,8 @@ overshoot nobody chose. **MCC improves but not significantly, so it remains a lo
 pLM-NN's 0.39 and is not claimed otherwise.**
 
 Against pLM-NN the secondary rule wins AUC, AUPRC, TPR and weighted F1, ties FPR and loses
-MCC — four, one and one, against the headline rule's three and three.
+MCC — four, one and one, against the headline rule's three and three. (These counts are on
+the 231 test records; on CryptoBench's chain unit see § 2.)
 
 **global_threshold stays the headline** so a reader can compare against the published
 table without taking the deviation on trust. The per-protein rule is named in advance in
