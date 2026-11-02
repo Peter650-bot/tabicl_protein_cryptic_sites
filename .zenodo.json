@@ -1,0 +1,14 @@
+{
+  "upload_type": "software",
+  "title": "PAM: code for cryptic binding site prediction with tabular in-context learning",
+  "creators": [
+    {"name": "Saba, Peter Riad"}
+  ],
+  "description": "Source code for PAM, which predicts cryptic binding site residues from apo protein structures with TabICLv2 over 53 structural features and 64 principal components of a cross-fitted fine-tuned ESM-2 3B embedding. Includes feature construction, fold-model fine-tuning, evaluation on CryptoBench, and the scripts that reproduce every table and figure of the accompanying manuscript, Tabular In-Context Learning for Cryptic Site Prediction (submitted to Bioinformatics).",
+  "license": "MIT",
+  "version": "1.0.0",
+  "keywords": ["cryptic binding sites", "protein language models", "ESM-2", "tabular in-context learning", "TabICL", "CryptoBench"],
+  "related_identifiers": [
+    {"identifier": "10.5281/zenodo.23882678", "relation": "isSupplementedBy", "resource_type": "dataset", "scheme": "doi"}
+  ]
+}
