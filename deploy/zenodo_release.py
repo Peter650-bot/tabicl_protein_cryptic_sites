@@ -15,7 +15,7 @@ WHAT GOES UP (build/zenodo_release/README.md describes each file)
 
 USAGE
     modal run deploy/zenodo_release.py::create_draft                 # prints id and reserved DOI
-    modal run deploy/zenodo_release.py --dep-id N --upload models     # or zips / all; parallel
+    modal run deploy/zenodo_release.py --dep-id N --upload models     # or zips / all / a name
     modal run deploy/zenodo_release.py --dep-id N --small --software-doi 10.5281/zenodo.M
     modal run deploy/zenodo_release.py --dep-id N --status-only
     modal run deploy/zenodo_release.py --dep-id N --do-publish
@@ -114,6 +114,54 @@ def _put(s, bucket: str, name: str, data, md5: str) -> None:
         raise RuntimeError(f"{name}: Zenodo md5 {got} != local {md5}")
 
 
+class _Progress:
+    """File reader that logs every GB, so a stalled upload is visible in the Modal log."""
+
+    def __init__(self, fh, size: int, name: str):
+        self.fh, self.size, self.name, self.done, self.mark = fh, size, name, 0, 0
+
+    def __len__(self):
+        return self.size
+
+    def read(self, n=-1):
+        b = self.fh.read(n)
+        self.done += len(b)
+        if self.done - self.mark >= 1 << 30 or (not b and self.done):
+            self.mark = self.done
+            print(f"  {self.name}: {self.done/1e9:.1f}/{self.size/1e9:.1f} GB", flush=True)
+        return b
+
+
+def _put_rdm(s, rec_id: int, name: str, path: str, md5: str, size: int, tries: int = 4):
+    """InvenioRDM draft-files API (init, content, commit); Zenodo's route for large files.
+
+    The legacy bucket PUT dropped the TLS connection on every file over ~100 MB.
+    Retries delete the partial file first."""
+    import time
+    files = f"https://zenodo.org/api/records/{rec_id}/draft/files"
+    for attempt in range(1, tries + 1):
+        try:
+            if s.get(f"{files}/{name}").status_code == 200:      # leftover of a failed try
+                _check(s.delete(f"{files}/{name}"))
+            _check(s.post(files, json=[{"key": name}]))
+            with open(path, "rb") as fh:
+                _check(s.put(f"{files}/{name}/content", data=_Progress(fh, size, name),
+                             headers={"Content-Type": "application/octet-stream",
+                                      "Content-Length": str(size)},
+                             # urllib3 applies the connect timeout while the body is sent;
+                             # Zenodo pauses > 60 s mid-upload on multi-GB files.
+                             timeout=(900, 6 * 3600)))
+            got = _check(s.post(f"{files}/{name}/commit")).json()["checksum"].removeprefix("md5:")
+            if got != md5:
+                raise RuntimeError(f"{name}: Zenodo md5 {got} != local {md5}")
+            return attempt
+        except Exception as e:                      # requests' errors don't pickle back
+            print(f"  {name}: attempt {attempt} failed: {e!r}"[:600], flush=True)
+            if attempt == tries:
+                raise RuntimeError(f"{name}: {e!r}"[:2000]) from None
+            time.sleep(60 * attempt)
+
+
 @app.function(image=image, secrets=[secret], timeout=600)
 def create_draft() -> dict:
     s = _session()
@@ -134,16 +182,16 @@ def upload_from_volume(dep_id: int, rel: str) -> dict:
     name = os.path.basename(rel)
     md5, sha, n = _hashes(path)
     t0 = time.time()
-    with open(path, "rb") as fh:
-        _put(s, _bucket(s, dep_id), name, fh, md5)
+    tries = _put_rdm(s, dep_id, name, path, md5, n)
     dt = time.time() - t0
     print(f"{name}: {n/1e9:.2f} GB in {dt:.0f}s, md5 verified", flush=True)
-    return {"file": name, "bytes": n, "md5": md5, "sha256": sha, "seconds": round(dt)}
+    return {"file": name, "bytes": n, "md5": md5, "sha256": sha, "seconds": round(dt),
+            "tries": tries}
 
 
 @app.function(image=image, secrets=[secret], timeout=600)
 def upload_bytes(dep_id: int, name: str, data: bytes) -> dict:
-    import hashlib
+    import hashlib  # small files: the legacy bucket PUT works
     s = _session()
     _put(s, _bucket(s, dep_id), name, data, hashlib.md5(data).hexdigest())
     return {"file": name, "bytes": len(data)}
@@ -174,10 +222,14 @@ def main(dep_id: int = 0, upload: str = "", small: bool = False,
          software_doi: str = "", status_only: bool = False, do_publish: bool = False):
     import json
     import pathlib
-    if upload:                                  # "models", "zips" or "all"
-        files = [f for f in BIG_FILES if upload == "all" or
-                 (f.endswith(".pt") if upload == "models" else f.endswith(".zip"))]
-        results = list(upload_from_volume.map([dep_id] * len(files), files))
+    if upload:                     # "models", "zips", "all" or one file name; one at a time
+        files = [f for f in BIG_FILES if upload == "all" or f.endswith("/" + upload) or
+                 (upload == "models" and f.endswith(".pt")) or
+                 (upload == "zips" and f.endswith(".zip"))]
+        results = []
+        for f in files:
+            results.append(upload_from_volume.remote(dep_id, f))
+            print(results[-1], flush=True)
         out = pathlib.Path(f"build/zenodo_release/uploaded_{upload}.json")
         out.write_text(json.dumps(results, indent=1))
         print(json.dumps(results, indent=1))
