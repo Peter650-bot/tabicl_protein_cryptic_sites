@@ -25,7 +25,8 @@ PUBLISHED_N_FEATURES = 117
 
 def _fake_table():
     """A table shaped like the merged one, without needing build/ to exist."""
-    base = ["resname", "sasa", "rsa", "ss"] + [f"esm_pc{i:02d}" for i in range(64)]
+    base = (["resname", "sasa", "rsa", "ss"] + list(FS.ENSEMBLE) + list(FS.CONSERVATION)
+            + [f"esm_pc{i:02d}" for i in range(64)])
     cols = {c: np.zeros(4) for c in base}
     cols.update({c: np.zeros(4) for c in FS.ALL_DERIVED})
     cols.update({
@@ -240,6 +241,21 @@ def test_ft_arms_are_what_they_say():
     assert FS.resolve("score118", t) == base + ["ft_score"]
     for name in FS.USES_FT:
         assert not [c for c in FS.resolve(name, t) if c.startswith("ftk")], name
+
+
+def test_family_ablation_arms_are_nested():
+    t = _ft_table()
+    struct = [c for c in FS.resolve("control", t) if c not in FS.ALL_PCS]
+    arms = ["fam33", "fam47", "fam53", "ft69", "ft85", "ft117"]
+    sets = [FS.resolve(a, t) for a in arms]
+    n33 = len(struct) - len(FS.ENSEMBLE) - len(FS.CONSERVATION)   # 33 on the real table
+    assert [len(s) for s in sets] == [n33, n33 + 14, n33 + 20, n33 + 36, n33 + 52, n33 + 84]
+    for small, big in zip(sets, sets[1:]):
+        assert set(small) < set(big)
+    assert FS.resolve("fam53", t) == struct
+    assert set(FS.resolve("fam47", t)) - set(FS.resolve("fam33", t)) == set(FS.ENSEMBLE)
+    assert set(FS.resolve("fam53", t)) - set(FS.resolve("fam47", t)) == set(FS.CONSERVATION)
+    assert FS.resolve("ft69", t) == struct + list(FS.FT_PCS[:16])
 
 
 def test_pls_arms_are_nested_and_replace_the_frozen_pcs():

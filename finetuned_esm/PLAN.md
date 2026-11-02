@@ -765,3 +765,44 @@ seeds`, 220 T4 jobs, 7.65 GPU-h of scoring, about $4.5). Report: `scripts/ftemb_
   (CB-full TPR 0.5169 ± 0.0023, MCC 0.3979 ± 0.0020).
 - Unchanged conclusions: every step-10 difference called a tie is still within the draw noise,
   and ft117 − control (+0.048) is ~40× the draw sd.
+
+## Step 13 — PAM's feature-family ablation, 2026-10-25
+
+Nested arms on PAM's own protocol (fold-k contexts, seed 0, CV-frozen threshold, test = mean
+of the four cross-fitted predictions): `fam33` geometry/physico-chemistry → `fam47` + 14
+ensemble pocket → `fam53` + 6 conservation (no pLM) → `ft69` / `ft85` / `ft117` + the first
+16 / 32 / 64 PCs of the **fine-tuned** (full recipe, clean, fold) ESM-2 3B embedding, not the
+frozen one. `ft117` is PAM (`fe1`, reused). Arms in `cryptic_tabicl/feature_sets.py`, stages
+`abgate` / `ablation` in `deploy/ftemb_stack.py` (run `ab1`, 101 T4 jobs, 2.51 GPU-h),
+report `scripts/ftemb_ablation_report.py`, scored on CryptoBench's unit (CB-full 262 chains,
+CB-P2RANK-184).
+
+### 13a — gate PASSED
+`ft117` k0 test rerun on the redeployed harness equals `fe1` (max |Δp| 0.0, n_context 30,309).
+Feature counts 33/47/53/69/85/117 checked on the real table; tests pass (200, 1 skipped).
+
+### 13b — SCORED ONCE (run `ab1`), CIs 2026-10-26
+Thresholds (`step13_thresholds.json`, from CV sub-folds before test was read): 0.352, 0.330,
+0.346, 0.345, 0.348, 0.341 (ft117 = step 10). Point estimates in `step13_ablation_points.json`.
+
+| CB-full 262, per protein / pooled | AUC | AUPRC | MCC | pooled AUC | pooled AUPRC |
+|---|---|---|---|---|---|
+| fam33 (33) | 0.826 | 0.340 | 0.271 | 0.831 | 0.269 |
+| fam47 (47) | 0.836 | 0.342 | 0.263 | 0.849 | 0.273 |
+| fam53 (53) | 0.843 | 0.381 | 0.292 | 0.864 | 0.317 |
+| ft69 (69)  | 0.866 | 0.471 | 0.374 | 0.904 | 0.434 |
+| ft85 (85)  | 0.866 | 0.472 | 0.380 | 0.905 | 0.435 |
+| ft117 (117)| 0.864 | 0.469 | 0.379 | 0.905 | 0.434 |
+
+- Reading so far: the ensemble block adds AUC but no AUPRC; conservation adds +0.04 AUPRC;
+  the first 16 fine-tuned PCs add +0.09 and carry the whole pLM gain; 32 and 64 add nothing.
+- Paired bootstrap (10k structure resamples, seed 0; `--workers 4`, draws drawn in order
+  first, so identical to a serial run: checked on 40 draws) → `step13_ablation.json`,
+  `step13_ablation.log`. Steps, CB-full per protein, AUPRC [95 % CI]:
+  ensemble +0.002 [−0.013, +0.018]; conservation +0.039 [+0.023, +0.056];
+  16 FT PCs +0.090 [+0.069, +0.111]; 32 PCs +0.001 [−0.004, +0.005];
+  64 PCs −0.003 [−0.008, +0.002]. Pooled AUC: ensemble +0.017 [+0.010, +0.025] is the
+  ensemble block's only significant gain; same pattern on the 184.
+- ft69 and ft85 tie PAM on every ranking metric (|Δ| ≤ 0.003, all CIs span 0); ft69's
+  CB-full per-protein TPR (−0.008) and MCC (−0.005) are just below PAM's, at the edge of
+  their CIs. PAM keeps 64 PCs; 16 would do.

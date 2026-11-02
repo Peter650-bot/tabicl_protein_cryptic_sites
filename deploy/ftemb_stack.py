@@ -21,6 +21,8 @@ STAGES
            RESULTS.md 4.6 study for the best model. Only `build_context`'s seed varies;
            the sub-fold split stays at SEED, so each seed reruns the whole protocol
            (thresholds included) on new negatives. Seed 0 is run `fe1`.
+    abgate   ft117 k=0 test on the redeployed harness; must match fe1 (step 13)
+    ablation 5 nested family arms (33, 47, 53, 69, 85) x k=0..3 x (4 sub-folds + test)
 
 USAGE
     modal deploy deploy/ftemb_stack.py
@@ -53,6 +55,12 @@ N_SEEDS = 12
 STAGES["seeds"] = [{"name": "ft117", "k": k, "query": q, "seed": s}
                    for s in range(1, N_SEEDS) for k in KS
                    for q in [f"sub{i}" for i in range(4)] + ["test"]]
+# Step 13, PAM's feature-family ablation. ft117 itself is fe1 (seed 0), reused; `abgate`
+# reruns one of its jobs on the redeployed harness and must match fe1.
+ABLATION_ARMS = ["fam33", "fam47", "fam53", "ft69", "ft85"]
+STAGES["abgate"] = [{"name": "ft117", "k": 0, "query": "test"}]
+STAGES["ablation"] = [{"name": n, "k": k, "query": q} for n in ABLATION_ARMS for k in KS
+                      for q in [f"sub{i}" for i in range(4)] + ["test"]]
 
 image = (
     modal.Image.debian_slim(python_version="3.11")

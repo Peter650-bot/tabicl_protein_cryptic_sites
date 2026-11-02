@@ -148,6 +148,22 @@ FEATURE_SETS: Dict[str, Dict[str, Tuple[str, ...]]] = {
     "ft64only": {"add": FT_PCS, "drop": (), "base": False},
     "score118": {"add": FT_SCORE, "drop": ()},
 }
+# Step 13: PAM's feature-family ablation (finetuned_esm/PLAN.md). Nested sets on PAM's
+# own cross-fitted protocol: 33 geometry/physico-chemistry -> + 14 ensemble pocket (47)
+# -> + 6 conservation (53) -> + the first 16 / 32 / 64 fine-tuned PCs (69 / 85 / 117 =
+# ft117). PCA components are ordered by variance, so the first d are the d-dim PCA.
+ENSEMBLE: Tuple[str, ...] = tuple(
+    f"ens_{c}{nb}" for nb in ("", "_nb8")
+    for c in ("mean", "std", "frac_druggable", "max", "q90", "static", "opening"))
+CONSERVATION: Tuple[str, ...] = tuple(
+    f"cons_{c}{nb}" for nb in ("", "_nb8") for c in ("score", "entropy", "prob_self"))
+FT_DIMS: Tuple[int, ...] = (16, 32)
+FEATURE_SETS["fam33"] = {"add": (), "drop": ALL_PCS + ENSEMBLE + CONSERVATION}
+FEATURE_SETS["fam47"] = {"add": (), "drop": ALL_PCS + CONSERVATION}
+FEATURE_SETS["fam53"] = {"add": (), "drop": ALL_PCS}
+for _d in FT_DIMS:
+    FEATURE_SETS[f"ft{53 + _d}"] = {"add": FT_PCS[:_d], "drop": ALL_PCS}
+
 # Step 11, pre-registered in finetuned_esm/frozen_step11.json.
 for _d in PLS_DIMS:
     FEATURE_SETS[f"pls{_d}_53"] = {"add": FT_PLS[:_d], "drop": ALL_PCS}
@@ -156,7 +172,7 @@ for _d in PLS_DIMS:
 USES_SUPERVISED_ESM = ("esmsup32", "esmsup32_seqwin_esmnb")
 USES_S2P = ("s2p_117", "s2p_53", "s2pfull_117", "s2pfull_53")
 USES_FT = ("ft117", "ft64only", "score118") + tuple(
-    f"pls{d}_{b}" for d in PLS_DIMS for b in ("53", "only"))
+    f"pls{d}_{b}" for d in PLS_DIMS for b in ("53", "only")) + tuple(f"ft{53 + d}" for d in FT_DIMS)
 
 
 def base_columns(table: pd.DataFrame) -> list[str]:

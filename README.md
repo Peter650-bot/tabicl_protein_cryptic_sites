@@ -131,6 +131,11 @@ tool could run on.
 
 ## Reproduce
 
+The feature tables, the four fine-tuned ESM-2 fold models and every prediction behind the
+paper are archived on Zenodo ([10.5281/zenodo.23882678](https://doi.org/10.5281/zenodo.23882678)).
+Unzipping its two bundles in the repository root puts each file where the scripts below
+expect it.
+
 ### Requirements
 
 - Python ≥ 3.10 with `numpy<2`, `pandas`, `pyarrow`, `scipy`, `scikit-learn`, `gemmi`, `requests`
@@ -215,3 +220,8 @@ pytest tests/ extension/tests -q
 | `tests/` | leakage guards, label logic, sampler and feature-set invariants |
 
 Every other model variant, ablation and correction is recorded in [RESULTS.md](RESULTS.md).
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). The vendored code in `deploy/s2p_models.py` and
+`deploy/finetuning_utils.py` is MIT-licensed by Vít Škrhák (details in the same file).
